@@ -1,0 +1,8 @@
+mlruns/*
+mlartifacts/*
+basic_auth.db
+logs/*
+dataset/*
+*.DS_store
+__pycache__/
+*.py[cod]

@@ -1,0 +1,39 @@
+{
+    "mlflow": {
+        "tracking_uri": "http://127.0.0.1:8080/",
+        "username": "admin",
+        "password": "password",
+        "experiment": "Cora"
+    },
+
+
+    "GraphSAGE": {
+        "dropout": 0,
+        "jk": "cat"
+    },
+
+
+    "GAT": {
+
+    },
+
+
+    "GIN": {
+
+    },
+
+
+    "num_epochs": 1000,
+    "batch_size": 16,
+    "lr": 1e-4,
+    "num_layers": 2,
+    "num_neighbors": 20,
+
+
+    "dataset": "Cora",
+    "num_node_features": 1433,
+    "num_classes": 7,
+
+    "seed": 118010142,
+    "patience": 50
+}
