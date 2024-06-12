@@ -5,12 +5,13 @@
     "save_model": true,
     "criterion":"loss",
     "patience": 50,
-    
+
     "mlflow": {
         "tracking_uri": "http://127.0.0.1:8080/",
         "username": "admin",
         "password": "password",
-        "experiment": "Cora"
+        "experiment": "Cora",
+        "auth": true
     },
 
 
@@ -26,7 +27,7 @@
         "GraphSAGE-mean": {
             "base_model": "GraphSAGE",
             "num_layers": 2,
-            "hidden_node_channels": 64,
+            "hidden_node_channels": 256,
             "num_neighbors": [25, 10],
             "dropout": 0,
             "jk": null

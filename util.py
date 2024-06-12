@@ -46,10 +46,11 @@ def create_parser(config):
 
     # MLflow settings
     mlflow_group = parser.add_argument_group('MLflow configuration')
-    mlflow_group.add_argument('--local_mlflow', action='store_true', default=True)
-    mlflow_group.add_argument('--mlflow_server',
-                        action='store_false', dest='local_mlflow')
-    mlflow_group.add_argument('--auth', action='store_true', help="Indicate whether the remote mlflow tracking server requires authentication. If enable, please provide the credentials in 'mlflow_config.json'.")
+    mlflow_group.add_argument('--tracking_uri',default=None)
+    mlflow_group.add_argument('--username',default=None)
+    mlflow_group.add_argument('--password',default=None)
+    mlflow_group.add_argument('--experiment',default=None)
+    mlflow_group.add_argument('--auth', action='store_true', help="Indicate whether the remote mlflow tracking server requires authentication. If enable, please provide the credentials in 'mlflow_config.json'.", default=None)
 
     return parser
 
@@ -62,28 +63,24 @@ def set_global_seed(seed):
 def setup_mlflow(config):
     # MLFlow
     mlflow_config = config["mlflow"]
-    if config["local_mlflow"]:
-        cwd = os.getcwd()
-        logger.info(f"MLFlow loggings are under the directory {cwd}")
-    else:
-        os.environ["MLFLOW_TRACKING_URI"] = mlflow_config['tracking_uri']
-        if config["auth"]:
-            response = requests.get(
-                f"{mlflow_config['tracking_uri']}",
-                auth=(mlflow_config["username"], mlflow_config["password"])
-            )
-            if (response.status_code == 200):
-                logger.success(
-                    f"Successfully logged in to the MLFlow server at {mlflow_config['tracking_uri']} as {mlflow_config['username']}.")
+    os.environ["MLFLOW_TRACKING_URI"] = mlflow_config['tracking_uri']
+    if mlflow_config["auth"]:
+        response = requests.get(
+            f"{mlflow_config['tracking_uri']}",
+            auth=(mlflow_config["username"], mlflow_config["password"])
+        )
+        if (response.status_code == 200):
+            logger.success(
+                f"Successfully logged in to the MLFlow server at {mlflow_config['tracking_uri']} as {mlflow_config['username']}.")
 
-                os.environ["MLFLOW_TRACKING_USERNAME"] = mlflow_config['username']
-                os.environ["MLFLOW_TRACKING_PASSWORD"] = mlflow_config['password']
-                
-            else:
-                logger.exception(f"Failed to log in to the MLFlow server at {mlflow_config['tracking_uri']}!")
-             
-        logger.info(f"Launching experiment: {mlflow_config['experiment']}")
-        mlflow.set_experiment(mlflow_config["experiment"])
+            os.environ["MLFLOW_TRACKING_USERNAME"] = mlflow_config['username']
+            os.environ["MLFLOW_TRACKING_PASSWORD"] = mlflow_config['password']
+            
+        else:
+            logger.exception(f"Failed to log in to the MLFlow server at {mlflow_config['tracking_uri']}!")
+            
+    logger.info(f"Launching experiment: {mlflow_config['experiment']}")
+    mlflow.set_experiment(mlflow_config["experiment"])
             
     
 def init_config():
@@ -101,14 +98,20 @@ def init_config():
     return config
 
 
+def overwrite_config(config, key, value):
+    if value != None:
+        if value != config[key]:
+            logger.warning(f'Overwrite {key}={value} from {key}={config[key]}')
+        config[key] = value
+
+
 def update_config(config:dict, vargs:dict):
-    for key, value in vargs.items():
-        if key in config:
-            if value!=None and value != config[key]:
-                logger.warning(f'Overwrite {key}={value} into configuration from argument input.')
-                config[key] = value
-        else:
-            config[key] = value
+    for key, value in config.items():
+        if type(value)==dict:
+            update_config(value, vargs)
+        if key in vargs:
+            overwrite_config(config, key, vargs[key])
+        
 
 
 def setup_logger():

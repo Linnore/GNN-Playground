@@ -72,16 +72,16 @@ def get_loader_SAINT(data:Data, config):
     
     
 def get_data(config):
-    if config["inductive_type"] == 'SAGE':
+    if config["hyperparameters"]["inductive_type"] == 'SAGE':
         return get_data_SAGE(config)
-    elif config["inductive_type"] == 'SAINT':
+    elif config["hyperparameters"]["inductive_type"] == 'SAINT':
         return get_data_SAINT(config)
     
     
 def get_loader(config):
-    if config["inductive_type"] == 'SAGE':
+    if config["hyperparameters"]["inductive_type"] == 'SAGE':
         return get_loader_SAGE(get_data_SAGE(config), config)
-    elif config["inductive_type"] == 'SAINT':
+    elif config["hyperparameters"]["inductive_type"] == 'SAINT':
         return get_loader_SAINT(get_data_SAINT(config), config)
     
     
