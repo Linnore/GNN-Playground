@@ -1,18 +1,21 @@
 from loguru import logger
 
 
-from util import create_parser, set_global_seed, setup_mlflow, setup_logger, setup_config
+from util import create_parser, set_global_seed, setup_mlflow, setup_logger, init_config, update_config
 from pyg.train import train_gnn
 from pyg.inference import infer_gnn
 
 def main():
     
+    # Initialize configuration
+    config = init_config()
+    
     # Setup arguments
-    parser = create_parser()
+    parser = create_parser(config)
     args = parser.parse_args()
     
-    # Setup configuration
-    config = setup_config(vars(args))
+    # Update configurations 
+    update_config(config, vars(args))
 
     # Setup logger
     setup_logger()

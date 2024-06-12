@@ -7,32 +7,44 @@ import torch
 
 from loguru import logger
 
-def create_parser():
+def create_parser(config):
     parser = argparse.ArgumentParser()
 
+    # Required field
     parser.add_argument('mode', choices=['train', 'inference'])
-    parser.add_argument('dataset', choices=['Cora', 'CiteSeer', 'PubMed'])
-    parser.add_argument('model', choices=['GraphSAGE', 'GAT', 'GIN'])
+    parser.add_argument('dataset', choices=list(config["dataset_collections"].keys()))
+    parser.add_argument('model', choices=list(config["model_collections"].keys()))
     
-    parser.add_argument('--seed', type=int, default=None)
-    parser.add_argument('--device', default='cpu')
-    parser.add_argument('--batch_size', type=int, default=None)
-    parser.add_argument('--num_neighbors', type=int, default=None)
-    parser.add_argument('--num_layers', type=int, default=None)
-    parser.add_argument('--lr', type=float, default=None)
-    parser.add_argument('--hidden_node_channels', type=int, help='Number of hidden node channels.', default=64)
-    parser.add_argument('--criterion', type=str, default="loss", choices=["loss", "accuracy", "f1"])
-    parser.add_argument('--save_model', action="store_true")
-    parser.add_argument('--save_dir', default="model")
-    parser.add_argument('--patience', type=int, default=None)
-    parser.add_argument('--tqdm', action="store_true")
     
-    # SAGE or SAINT
-    inductive_type_group = parser.add_mutually_exclusive_group()
+    # Global settings
+    global_settings = parser.add_argument_group("Global Settigns")
+    global_settings.add_argument('--seed', type=int, default=None)
+    global_settings.add_argument('--device', default=None)
+    global_settings.add_argument('--tqdm', action="store_true", default=None)
+    global_settings.add_argument('--save_model', action="store_true", default=None)
+    global_settings.add_argument('--criterion', type=str, default=None, choices=["loss", "accuracy", "f1"])
+    global_settings.add_argument('--patience', type=int, default=None)
+    
+    
+    # Global hyperparameters
+    global_params = parser.add_argument_group("Global Hyperparameters")
+    inductive_type_group = global_params.add_mutually_exclusive_group()
     inductive_type_group.add_argument('--SAGE', action="store_const", dest='inductive_type', const='SAGE', default='SAGE')
     inductive_type_group.add_argument('--SAINT', action="store_const", dest='inductive_type', const='SAINT')
+    global_params.add_argument('--num_epochs', type=int, default=None)
+    global_params.add_argument('--batch_size', type=int, default=None)
+    global_params.add_argument('--lr', type=float, default=None)
+    
+    # Model hyperparameters
+    model_params = parser.add_argument_group("Model Hyperparameters")
+    model_params.add_argument('--num_layers', type=int, default=None)
+    model_params.add_argument('--hidden_node_channels', type=int, help='Number of hidden node channels.', default=None)
+    model_params.add_argument('--num_neighbors', type=int, nargs="+", default=None)
+    model_params.add_argument('--dropout', type=float, default=None)
+    model_params.add_argument('--jk', type=str, default=None)
+    
 
-
+    # MLflow settings
     mlflow_group = parser.add_argument_group('MLflow configuration')
     mlflow_group.add_argument('--local_mlflow', action='store_true', default=True)
     mlflow_group.add_argument('--mlflow_server',
@@ -74,10 +86,22 @@ def setup_mlflow(config):
         mlflow.set_experiment(mlflow_config["experiment"])
             
     
-def setup_config(vargs:dict):
+def init_config():
     with open("config.json", "r") as config_file:
         config = json.load(config_file)
         
+    # for key, value in vargs.items():
+    #     if key in config:
+    #         if value!=None and value != config[key]:
+    #             logger.warning(f'Overwrite {key}={value} into configuration from argument input.')
+    #             config[key] = value
+    #     else:
+    #         config[key] = value
+            
+    return config
+
+
+def update_config(config:dict, vargs:dict):
     for key, value in vargs.items():
         if key in config:
             if value!=None and value != config[key]:
@@ -85,8 +109,6 @@ def setup_config(vargs:dict):
                 config[key] = value
         else:
             config[key] = value
-            
-    return config
 
 
 def setup_logger():

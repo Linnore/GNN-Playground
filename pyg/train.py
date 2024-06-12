@@ -1,7 +1,6 @@
 import torch
 import mlflow
 import pprint
-import evaluate
 import os
 
 from .data_util import get_loader
@@ -9,24 +8,23 @@ from .model.GraphSAGE import GraphSAGE_Default, GraphSAGEe
 
 from loguru import logger
 from torch_geometric.nn import summary
-from datetime import datetime
 from tqdm import tqdm
 from sklearn.metrics import classification_report, f1_score, accuracy_score
 
 def get_model(config):
-    
-    if config["model"] == 'GraphSAGE':
-        sage_config = config["GraphSAGE"]
+    model_config = config["model_collections"][config["model"]]
+    dataset_config = config["dataset_collections"][config["dataset"]]
+    if model_config["base_model"] == 'GraphSAGE':
         model = GraphSAGE_Default(
-            in_channels=config["num_node_features"],
-            hidden_channels=config["hidden_node_channels"],
-            num_layers=config["num_layers"],
-            out_channels=config["num_classes"],
-            dropout=sage_config["dropout"],
-            jk=sage_config["jk"]
+            in_channels=dataset_config["num_node_features"],
+            out_channels=dataset_config["num_classes"],
+            hidden_channels=model_config["hidden_node_channels"],
+            num_layers=model_config["num_layers"],
+            dropout=model_config["dropout"],
+            jk=model_config["jk"],
         )
     else:
-        logger.exception(f"{config['model']} not implemented.")
+        logger.exception(f"Unreconized base model: {model_config['base_model']}")
     
     return model
 
@@ -35,17 +33,16 @@ def train_gnn(config):
     
     device = config["device"]
     
+    # Initialize MLflow Logging
     run_name = f"{config['model']}"
     run = mlflow.start_run(run_name=run_name)
+    mlflow.set_tag("base model", config["model_collections"][config["model"]]["base_model"])
     logger.info(f"Launching run: {run.info.run_name}")
     
+    
     # Log hyperparameters
-    params = {
-        "num_epochs": config["num_epochs"],
-        "batch_size": config["batch_size"],
-        "learning_rate": config["lr"]
-    }
-    params.update(config[config["model"]])
+    params = config["hyperparameters"]
+    params.update(config["model_collections"][config["model"]])
     params_str = pprint.pformat(params)
     logger.info(f"Hyperparameters:\n{params_str}")
     mlflow.log_params(params)
@@ -56,6 +53,12 @@ def train_gnn(config):
     # Get model
     model = get_model(config).to(device)
     
+    # Setup save directory for optimizer states
+    if config["save_model"]:
+        save_path = os.path.join("logs/tmp", f"{run.info.run_name}-Optimizer-{run.info.run_id}.tar")
+        if not os.path.exists(os.path.dirname(save_path)):
+            os.makedirs(os.path.dirname(save_path))
+            
     # Summary logging
     sample_batch=next(iter(train_loader)).to(device)
     sample_x = sample_batch.x
@@ -67,7 +70,7 @@ def train_gnn(config):
     mlflow.log_artifact("logs/tmp/model_summary.txt")
     
     # Setup Optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=config["lr"])
+    optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
     
     # Setup loss function
     logger.warning('Todo: Implement WCE.')
@@ -83,10 +86,10 @@ def train_gnn(config):
     # Training loop
     patience = config["patience"]
     if patience == None:
-        patience = config["num_epochs"]
+        patience = params["num_epochs"]
     train_steps = 0
     best_epoch = 0
-    for epoch in range(1, 1+config["num_epochs"]):
+    for epoch in range(1, 1+params["num_epochs"]):
         if config["tqdm"]:
             print(f"Epoch {epoch}:")
         # Batch training
@@ -115,7 +118,7 @@ def train_gnn(config):
             num_train += num_batch_train
             
             train_steps += 1
-            train_bar.set_description(f"Train_loss={loss:2.6f}")
+            train_bar.set_description(f"Train_loss={loss:<8.4g}")
             mlflow.log_metric("Running Loss", loss, step=train_steps)
         
         # Metrics on training data
@@ -154,7 +157,7 @@ def train_gnn(config):
             total_val_loss += loss * num_batch_val
             num_val += num_batch_val
             
-            val_bar.set_description(f"Val_loss={loss:2.6f}")
+            val_bar.set_description(f"  Val_loss={loss:<8.4g}")
         
         # Metrics on validation data
         val_loss = total_val_loss/num_val
@@ -192,7 +195,7 @@ def train_gnn(config):
         test_f1 = f1_score(truths, predictions, average="weighted")
         mlflow.log_metric("Testing Accuracy", test_acc, epoch)
         
-        logger.info(f"Epoch {epoch}: train_loss={train_loss:.4g}, train_acc={train_acc:.4g}, val_loss={val_loss:.4g}, val_acc={val_acc:.4g}, test_acc={test_acc:.4g}, test_f1={test_f1:.4g}")
+        logger.info(f"Epoch {epoch}: train_loss={train_loss:<8.4g}, train_acc={train_acc:<8.4g}, val_loss={val_loss:<8.4g}, val_acc={val_acc:<8.4g}, test_acc={test_acc:<8.4g}, test_f1={test_f1:<8.4g}")
         
         # Best model
         if criterion=="loss":
@@ -212,12 +215,9 @@ def train_gnn(config):
             best_epoch = epoch
             
             if config["save_model"]:
-                save_path = os.path.join(config["save_dir"], config["mlflow"]["experiment"], run.info.run_name)
-                logger.warning("Todo: save optimizer states.")
                 torch.save(
                     {
                         'epoch': epoch,
-                        'model_state_dict': best_model_state_dict,
                         'optimizer_state_dict': optimizer.state_dict(),
                     },
                     save_path
@@ -229,11 +229,15 @@ def train_gnn(config):
             break
                 
     model.load_state_dict(best_model_state_dict)
-    mlflow.pytorch.log_model(model, "Best Model")
+    if config["save_model"]:
+        mlflow.pytorch.log_model(model, "Best Model")
+        mlflow.log_artifact(save_path, "Optimizer States")
+        os.remove(save_path)
     
     with open("logs/tmp/test_report.txt", "w") as out_file:
         out_file.write(best_report)
     mlflow.log_artifact("logs/tmp/test_report.txt")
+    
     
     logger.info(f"Best model report:\n{best_report}")
     

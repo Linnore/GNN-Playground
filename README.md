@@ -7,6 +7,19 @@ Todo
 
 ## Docs
 
+### Quick Start:
+Step 1. Launch a local MLflow tracking server at the root of this repo:
+```bash
+
+bash launch_mlflow.sh 
+```
+
+Step 2. 
+```bash
+
+python run_pyg.py train Cora GraphSAGE-mfean --mlflow_server --authe
+```
+
 ### MLflow
 
 #### Logging Mode
@@ -21,13 +34,18 @@ By default, the codes in this repo will use MLflow's file storage locally under 
 
 mlflow ui
 ```
+or
+```bash
 
+bash launch_mlflow.sh 
+```
+Note that the credentials are in `config.json`.
 
 It is recommended to log and manage the experiments locally, and only submit/push valuable experiments to a centralized MLflow tracking server for team collaboration. Please check the details [in this section](#push-local-mlflow-experiments-to-mlflow-tracking-server).
 
 #### Set up MLflow Tracking Server
 
-If using a MLflow tracking server is desired, one can configure the MLflow settings in `mlflow_config.json` and enable `--mlflow_server`. 
+If using a MLflow tracking server is desired, one can configure the MLflow settings in `config.json` and enable `--mlflow_server`. 
   - `tracking_uri` (required): the tracking URI of the MLflow tracking server.
   - `username` (optional): only required when the MLflow tracking server enables authentication.
   - `password` (optional): only required when the MLflow tracking server enables authentication.
@@ -40,7 +58,7 @@ The following scripts launch a local MLflow server with basic authentication. Se
 bash launch_mlflow.sh
 ```
 
-**Warning:** Codes in this project logs during runtime. If using a remote MLflow Tracking Server, please make sure the remote connection is stable during runtime. Otherwise, processes will be terminated due to connection failures.
+**Warning:** Codes in this project log during runtime. If using a remote MLflow Tracking Server, please make sure the remote connection is stable during runtime. Otherwise, processes will be terminated due to connection failures.
 
 
 #### Push Local MLflow Experiments to MLflow Tracking Server 
@@ -79,7 +97,24 @@ import-experiment \
   --input-dir /tmp/export
 ```
 
-#### 
+### Pytorch Geometric Playground
+
+```bash
+
+python run_pyg.py train Cora GraphSAGE --mlflow_server --auth --device cpu
+```
+
+ - mode: must choose from `train`, `inference`
+ - dataset: provide a dataset name or a local dataset directory.
+ - model: supported models includes
+   - GraphSAGE
+   - GAT
+   - GIN
+  Modify the settings of corresponding models in `config.json` to configure the models.
+ - (optional) mlflow_server: use the MLflow tracking server provided in the `config.json`.
+ - (optional) auth: use the authentication credentials in the `config.json` to login the MLflow tracking server.
+ - (optional) device: specify the device.
+  
 
 
 
@@ -95,8 +130,7 @@ import-experiment \
 
 - [x] Use MLflow as the lifecycle tool.
 - [ ] Pytorch Geometric
-  - [ ] GCN
-  - [ ] GraphSAGE
+  - [x] GraphSAGE
   - [ ] GAT
   - [ ] GIN
 - [ ] Deep Graph Library
