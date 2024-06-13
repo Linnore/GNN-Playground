@@ -17,8 +17,10 @@ bash launch_mlflow.sh
 Step 2. 
 ```bash
 
-python run_pyg.py train Cora GraphSAGE-mfean --mlflow_server --authe
+python run_pyg.py train GraphSAGE-mean Reddit
 ```
+
+Advanced experiment by modifying `config.py`
 
 ### MLflow
 
@@ -39,13 +41,13 @@ or
 
 bash launch_mlflow.sh 
 ```
-Note that the credentials are in `config.json`.
+Note that the credentials are in `config.py`.
 
 It is recommended to log and manage the experiments locally, and only submit/push valuable experiments to a centralized MLflow tracking server for team collaboration. Please check the details [in this section](#push-local-mlflow-experiments-to-mlflow-tracking-server).
 
 #### Set up MLflow Tracking Server
 
-If using a MLflow tracking server is desired, one can configure the MLflow settings in `config.json` and enable `--mlflow_server`. 
+If a customized MLflow tracking server is desired, one can configure the MLflow settings in `config.py`. 
   - `tracking_uri` (required): the tracking URI of the MLflow tracking server.
   - `username` (optional): only required when the MLflow tracking server enables authentication.
   - `password` (optional): only required when the MLflow tracking server enables authentication.
@@ -97,11 +99,13 @@ import-experiment \
   --input-dir /tmp/export
 ```
 
+One can also use the same export and import server to migrate runs between different experiments.
+
 ### Pytorch Geometric Playground
 
 ```bash
 
-python run_pyg.py train Cora GraphSAGE --mlflow_server --auth --device cpu
+python run_pyg.py train GraphSAGE-mean Cora --auth --device cpu
 ```
 
  - mode: must choose from `train`, `inference`
@@ -110,9 +114,9 @@ python run_pyg.py train Cora GraphSAGE --mlflow_server --auth --device cpu
    - GraphSAGE
    - GAT
    - GIN
-  Modify the settings of corresponding models in `config.json` to configure the models.
- - (optional) mlflow_server: use the MLflow tracking server provided in the `config.json`.
- - (optional) auth: use the authentication credentials in the `config.json` to login the MLflow tracking server.
+  Modify the settings of corresponding models in `config.py` to configure the models.
+ - (optional) mlflow_server: use the MLflow tracking server provided in the `config.py`.
+ - (optional) auth: use the authentication credentials in the `config.py` to login the MLflow tracking server.
  - (optional) device: specify the device.
   
 
@@ -130,8 +134,11 @@ python run_pyg.py train Cora GraphSAGE --mlflow_server --auth --device cpu
 
 - [x] Use MLflow as the lifecycle tool.
 - [ ] Pytorch Geometric
-  - [x] GraphSAGE
-  - [ ] GAT
+  - [-] GraphSAGE
+    - [x] PyG's official implementation
+    - [ ] Customized implementation
+  - [-] GAT
+    - [x] PyG's official implementation
   - [ ] GIN
 - [ ] Deep Graph Library
 - [ ] Other explorations.

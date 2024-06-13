@@ -4,11 +4,11 @@ import requests
 import json
 import mlflow
 import torch_geometric
-import configurations
+import config
 
 from loguru import logger
 
-def create_parser(config:configurations):
+def create_parser(config:config):
     parser = argparse.ArgumentParser()
 
     # Required field
@@ -38,7 +38,7 @@ def create_parser(config:configurations):
     
     # General hyperparameters
     hyperparameters = parser.add_argument_group("Global Hyperparameters")
-    hyperparameters.add_argument('--inductive_type', choices=config.inductive_type_options, default=None)
+    hyperparameters.add_argument('--sampling_strategy', choices=config.sampling_strategy_options, default=None)
     hyperparameters.add_argument('--SAGE_option', choices=config.SAGE_options, default=None)
     hyperparameters.add_argument('--num_epochs', type=int, default=None)
     hyperparameters.add_argument('--batch_size', type=int, default=None)
@@ -87,7 +87,7 @@ def setup_mlflow(config):
 def init_config():
     # with open("config.json", "r") as config_file:
     #     config = json.load(config_file)
-    from configurations import config
+    from config import config
     return config
 
 

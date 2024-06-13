@@ -3,7 +3,7 @@ import mlflow
 import pprint
 import os
 
-from .data_util import get_loader
+from .data_utils import get_loader
 from .model.GraphSAGE import GraphSAGE_PyG
 from .model.GAT import GAT_PyG, GAT_Custom
 

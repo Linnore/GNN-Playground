@@ -20,25 +20,26 @@ class config:
 
     general_config = {
         "framework": "inductive",
+
+        "sampling_strategy": "SAGE",  # Must be choosen from sampling_strategy options
+
+        # Used if sampling_strategy is SAGE; Must be choosen from SAGE_options
+        "SAGE_option": "strict",
+
         "seed": 118010142,
         "device": "cpu",
         "tqdm": False,
         "save_model": True,
         "criterion": "loss",
-        "num_epochs": 300,
-        "patience": 15,
+        "num_epochs": 400,
+        "patience": 40,
         "num_workers": 0,
     }
 
     # Hyperparameters
     hyperparameters = {
-        "inductive_type": "SAGE",  # Must be choosen from inductive_type options
-
-        # Used if inductive_type is SAGE; Must be choosen from SAGE_options
-        "SAGE_option": "strict",
-
         "batch_size": 64,
-        "lr": 1e-4
+        "lr": 1e-3
     }
 
     """Options for difference experiment settings
@@ -47,19 +48,19 @@ class config:
         The data split will follow a transductive manner. Training nodes can connected with validation nodes or testing nodes, though backward propogation is only applied on the loss computed by the training nodes.
         
     inductive:
-        - If inductive_type is "SAGE":
+        - If sampling_strategy is "SAGE":
             -  default or strict
                 The data will be split to train_subgraph, val_subgraph, and test_subgraph. No message passing across the train. val, and test datasets is allowed.
             -  soft:
                 Training nodes are cut off from validation nodes and testing nodes to form a training subgraph. However, when doing inference on the validation nodes and testing nodes, the edges  <Node_train, Node_val/Node_test>  and <Node_val, Node_test> can be used.
-        - If inductive_type is "SAINT"
+        - If sampling_strategy is "SAINT"
             TODO
     """
     framework_options = [
         "transductive",
         "inductive"
     ]
-    inductive_type_options = [
+    sampling_strategy_options = [
         "SAGE",  # use the inductive learning proposed by GraphSAGE
         "SAINT"  # use the inductive learning proposed by GraphSAINT
     ]
