@@ -4,7 +4,8 @@ import pprint
 import os
 
 from .data_util import get_loader
-from .model.GraphSAGE import GraphSAGE_Default, GraphSAGEe
+from .model.GraphSAGE import GraphSAGE_PyG
+from .model.GAT import GAT_PyG, GAT_Custom
 
 from loguru import logger
 from torch_geometric.nn import summary
@@ -14,29 +15,48 @@ from sklearn.metrics import classification_report, f1_score, accuracy_score
 def get_model(config):
     model_config = config["model_collections"][config["model"]]
     dataset_config = config["dataset_collections"][config["dataset"]]
-    if model_config["base_model"] == 'GraphSAGE':
-        model = GraphSAGE_Default(
-            in_channels=dataset_config["num_node_features"],
-            out_channels=dataset_config["num_classes"],
-            hidden_channels=model_config["hidden_node_channels"],
-            num_layers=model_config["num_layers"],
-            dropout=model_config["dropout"],
-            jk=model_config["jk"],
-        )
-    else:
-        logger.exception(f"Unreconized base model: {model_config['base_model']}")
+    match model_config["base_model"]:
+        case "GraphSAGE_PyG":
+            model = GraphSAGE_PyG(
+                in_channels=dataset_config["num_node_features"],
+                out_channels=dataset_config["num_classes"],
+                hidden_channels=model_config["hidden_node_channels"],
+                num_layers=model_config["num_layers"],
+                dropout=model_config["dropout"],
+                jk=model_config["jk"],
+            )
+        case "GAT_PyG":
+            model = GAT_PyG(
+                in_channels=dataset_config["num_node_features"],
+                out_channels=dataset_config["num_classes"],
+                hidden_channels=model_config["hidden_node_channels"],
+                num_layers=model_config["num_layers"],
+                dropout=model_config["dropout"],
+                jk=model_config["jk"],
+            )
+        case "GAT_Custom":
+            model = GAT_Custom(
+                
+            )
+            
+        case "GIN_PyG":
+            pass
+        case _:
+            logger.exception(f"Unreconized base model: {model_config['base_model']}")
     
     return model
 
 
 def train_gnn(config):
     
-    device = config["device"]
+    general_config = config["general_config"]    
+    device = general_config["device"]
     
     # Initialize MLflow Logging
-    run_name = f"{config['model']}"
+    run_name = f"{config['model']}-{config['dataset']}"
     run = mlflow.start_run(run_name=run_name)
     mlflow.set_tag("base model", config["model_collections"][config["model"]]["base_model"])
+    mlflow.set_tag("dataset", config["dataset"])
     logger.info(f"Launching run: {run.info.run_name}")
     
     
@@ -44,7 +64,9 @@ def train_gnn(config):
     params = config["hyperparameters"]
     params.update(config["model_collections"][config["model"]])
     params_str = pprint.pformat(params)
+    logger.info(f"General configurations:\n{general_config}")
     logger.info(f"Hyperparameters:\n{params_str}")
+    mlflow.log_params(general_config)
     mlflow.log_params(params)
     
     # Get loaders
@@ -54,7 +76,7 @@ def train_gnn(config):
     model = get_model(config).to(device)
     
     # Setup save directory for optimizer states
-    if config["save_model"]:
+    if general_config["save_model"]:
         save_path = os.path.join("logs/tmp", f"{run.info.run_name}-Optimizer-{run.info.run_id}.tar")
         if not os.path.exists(os.path.dirname(save_path)):
             os.makedirs(os.path.dirname(save_path))
@@ -77,27 +99,27 @@ def train_gnn(config):
     loss_fn = torch.nn.CrossEntropyLoss(reduction='mean') 
     
     # Setup metrics
-    criterion = config["criterion"].lower()
+    criterion = general_config["criterion"].lower()
     if criterion=="loss":
         best_value = -2147483647
     elif criterion in ["accuracy", "f1"]:
         best_value = -1
     
     # Training loop
-    patience = config["patience"]
+    patience = general_config["patience"]
     if patience == None:
-        patience = params["num_epochs"]
+        patience = general_config["num_epochs"]
     train_steps = 0
     best_epoch = 0
-    for epoch in range(1, 1+params["num_epochs"]):
-        if config["tqdm"]:
+    for epoch in range(1, 1+general_config["num_epochs"]):
+        if general_config["tqdm"]:
             print(f"Epoch {epoch}:")
         # Batch training
         model.train()
         total_train_loss = num_train = 0
         predictions = []
         truths = []
-        train_bar = tqdm(train_loader, total=len(train_loader), disable=not config["tqdm"])
+        train_bar = tqdm(train_loader, total=len(train_loader), disable=not general_config["tqdm"])
         for batch in train_bar:
             optimizer.zero_grad()
             batch = batch.to(device)
@@ -118,7 +140,7 @@ def train_gnn(config):
             num_train += num_batch_train
             
             train_steps += 1
-            train_bar.set_description(f"Train_loss={loss:<8.4g}")
+            train_bar.set_description(f"Train_loss={loss:<8.6g}")
             mlflow.log_metric("Running Loss", loss, step=train_steps)
         
         # Metrics on training data
@@ -138,8 +160,8 @@ def train_gnn(config):
         total_val_loss = num_val = 0
         predictions = []
         truths = []
-        val_bar = tqdm(val_loader, total=len(val_loader), disable=not config["tqdm"])
-        for batch in val_bar:
+        val_bar = tqdm(val_loader, total=len(val_loader), disable=not general_config["tqdm"])
+        for batch in val_loader:
             optimizer.zero_grad()
             batch = batch.to(device)
             
@@ -157,7 +179,7 @@ def train_gnn(config):
             total_val_loss += loss * num_batch_val
             num_val += num_batch_val
             
-            val_bar.set_description(f"  Val_loss={loss:<8.4g}")
+            val_bar.set_description(f"  Val_loss={loss:<8.6g}")
         
         # Metrics on validation data
         val_loss = total_val_loss/num_val
@@ -175,7 +197,7 @@ def train_gnn(config):
         num_test = 0
         predictions = []
         truths = []
-        test_bar = tqdm(test_loader, desc=f"Testing", total=len(test_loader), disable=not config["tqdm"])
+        test_bar = tqdm(test_loader, desc=f"Testing", total=len(test_loader), disable=not general_config["tqdm"])
         for batch in test_bar:
             optimizer.zero_grad()
             batch = batch.to(device)
@@ -195,7 +217,7 @@ def train_gnn(config):
         test_f1 = f1_score(truths, predictions, average="weighted")
         mlflow.log_metric("Testing Accuracy", test_acc, epoch)
         
-        logger.info(f"Epoch {epoch}: train_loss={train_loss:<8.4g}, train_acc={train_acc:<8.4g}, val_loss={val_loss:<8.4g}, val_acc={val_acc:<8.4g}, test_acc={test_acc:<8.4g}, test_f1={test_f1:<8.4g}")
+        logger.info(f"Epoch {epoch}: train_loss={train_loss:<8.6g}, train_acc={train_acc:<8.6g}, val_loss={val_loss:<8.6g}, val_acc={val_acc:<8.6g}, test_acc={test_acc:<8.6g}, test_f1={test_f1:<8.6g}")
         
         # Best model
         if criterion=="loss":
@@ -207,14 +229,14 @@ def train_gnn(config):
             
         if criterion_value > best_value:
             best_value = criterion_value
-            mlflow.log_metric("Best Test Accuracy", test_acc)
-            mlflow.log_metric("Best Test F1", test_f1)
+            mlflow.log_metric("Best Test Accuracy", test_acc, epoch)
+            mlflow.log_metric("Best Test F1", test_f1, epoch)
             
             best_model_state_dict = model.state_dict()
             best_report = classification_report(truths, predictions, zero_division=0)
             best_epoch = epoch
             
-            if config["save_model"]:
+            if general_config["save_model"]:
                 torch.save(
                     {
                         'epoch': epoch,
@@ -229,7 +251,7 @@ def train_gnn(config):
             break
                 
     model.load_state_dict(best_model_state_dict)
-    if config["save_model"]:
+    if general_config["save_model"]:
         mlflow.pytorch.log_model(model, "Best Model")
         mlflow.log_artifact(save_path, "Optimizer States")
         os.remove(save_path)

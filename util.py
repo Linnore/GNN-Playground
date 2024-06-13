@@ -3,37 +3,46 @@ import argparse
 import requests
 import json
 import mlflow
-import torch
+import torch_geometric
+import configurations
 
 from loguru import logger
 
-def create_parser(config):
+def create_parser(config:configurations):
     parser = argparse.ArgumentParser()
 
     # Required field
     parser.add_argument('mode', choices=['train', 'inference'])
-    parser.add_argument('dataset', choices=list(config["dataset_collections"].keys()))
-    parser.add_argument('model', choices=list(config["model_collections"].keys()))
+    parser.add_argument('model', choices=list(config.model_collections.keys()))
+    parser.add_argument('dataset', choices=list(config.dataset_collections.keys()))
+    
+    # MLflow settings
+    mlflow_config = parser.add_argument_group('MLflow configuration')
+    mlflow_config.add_argument('--tracking_uri',default=None)
+    mlflow_config.add_argument('--username',default=None)
+    mlflow_config.add_argument('--password',default=None)
+    mlflow_config.add_argument('--experiment',default=None)
+    mlflow_config.add_argument('--auth', action='store_true', help="Indicate whether the remote mlflow tracking server requires authentication. If enable, please provide the credentials in 'mlflow_config.json'.", default=None)
+    
+    # General settings
+    general_config = parser.add_argument_group("Global Settigns")
+    general_config.add_argument('--framework', choices=config.framework_options, default=None)
+    general_config.add_argument('--seed', type=int, default=None)
+    general_config.add_argument('--device', default=None)
+    general_config.add_argument('--tqdm', action="store_true", default=None)
+    general_config.add_argument('--save_model', action="store_true", default=None)
+    general_config.add_argument('--criterion', type=str, default=None, choices=["loss", "accuracy", "f1"])
+    general_config.add_argument('--patience', type=int, default=None)
+    general_config.add_argument('--num_workers', type=int, default=None)
     
     
-    # Global settings
-    global_settings = parser.add_argument_group("Global Settigns")
-    global_settings.add_argument('--seed', type=int, default=None)
-    global_settings.add_argument('--device', default=None)
-    global_settings.add_argument('--tqdm', action="store_true", default=None)
-    global_settings.add_argument('--save_model', action="store_true", default=None)
-    global_settings.add_argument('--criterion', type=str, default=None, choices=["loss", "accuracy", "f1"])
-    global_settings.add_argument('--patience', type=int, default=None)
-    
-    
-    # Global hyperparameters
-    global_params = parser.add_argument_group("Global Hyperparameters")
-    inductive_type_group = global_params.add_mutually_exclusive_group()
-    inductive_type_group.add_argument('--SAGE', action="store_const", dest='inductive_type', const='SAGE', default='SAGE')
-    inductive_type_group.add_argument('--SAINT', action="store_const", dest='inductive_type', const='SAINT')
-    global_params.add_argument('--num_epochs', type=int, default=None)
-    global_params.add_argument('--batch_size', type=int, default=None)
-    global_params.add_argument('--lr', type=float, default=None)
+    # General hyperparameters
+    hyperparameters = parser.add_argument_group("Global Hyperparameters")
+    hyperparameters.add_argument('--inductive_type', choices=config.inductive_type_options, default=None)
+    hyperparameters.add_argument('--SAGE_option', choices=config.SAGE_options, default=None)
+    hyperparameters.add_argument('--num_epochs', type=int, default=None)
+    hyperparameters.add_argument('--batch_size', type=int, default=None)
+    hyperparameters.add_argument('--lr', type=float, default=None)
     
     # Model hyperparameters
     model_params = parser.add_argument_group("Model Hyperparameters")
@@ -42,27 +51,19 @@ def create_parser(config):
     model_params.add_argument('--num_neighbors', type=int, nargs="+", default=None)
     model_params.add_argument('--dropout', type=float, default=None)
     model_params.add_argument('--jk', type=str, default=None)
+    model_params.add_argument('--v2', action="store_true", default=None)
     
-
-    # MLflow settings
-    mlflow_group = parser.add_argument_group('MLflow configuration')
-    mlflow_group.add_argument('--tracking_uri',default=None)
-    mlflow_group.add_argument('--username',default=None)
-    mlflow_group.add_argument('--password',default=None)
-    mlflow_group.add_argument('--experiment',default=None)
-    mlflow_group.add_argument('--auth', action='store_true', help="Indicate whether the remote mlflow tracking server requires authentication. If enable, please provide the credentials in 'mlflow_config.json'.", default=None)
 
     return parser
 
 
 def set_global_seed(seed):
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
+    torch_geometric.seed_everything(seed)
 
 
 def setup_mlflow(config):
     # MLFlow
-    mlflow_config = config["mlflow"]
+    mlflow_config = config["mlflow_config"]
     os.environ["MLFLOW_TRACKING_URI"] = mlflow_config['tracking_uri']
     if mlflow_config["auth"]:
         response = requests.get(
@@ -84,17 +85,9 @@ def setup_mlflow(config):
             
     
 def init_config():
-    with open("config.json", "r") as config_file:
-        config = json.load(config_file)
-        
-    # for key, value in vargs.items():
-    #     if key in config:
-    #         if value!=None and value != config[key]:
-    #             logger.warning(f'Overwrite {key}={value} into configuration from argument input.')
-    #             config[key] = value
-    #     else:
-    #         config[key] = value
-            
+    # with open("config.json", "r") as config_file:
+    #     config = json.load(config_file)
+    from configurations import config
     return config
 
 
@@ -109,8 +102,9 @@ def update_config(config:dict, vargs:dict):
     for key, value in config.items():
         if type(value)==dict:
             update_config(value, vargs)
-        if key in vargs:
+        elif key in vargs:
             overwrite_config(config, key, vargs[key])
+    return config
         
 
 
@@ -120,6 +114,6 @@ def setup_logger():
     if not os.path.exists(tmp_dir):
         os.makedirs(tmp_dir)
     
-    logger.add(os.path.join(log_dir, "log_{time:YYYY-MM-DD}.txt"), rotation='10 MB')
+    logger.add(os.path.join(log_dir, "log_{time:YYYY-MM-DD-HH_mm}.txt"), rotation='10 MB')
     
     
