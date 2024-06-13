@@ -1,7 +1,6 @@
 import os
 import argparse
 import requests
-import json
 import mlflow
 import torch_geometric
 import config
@@ -22,25 +21,26 @@ def create_parser(config:config):
     mlflow_config.add_argument('--username',default=None)
     mlflow_config.add_argument('--password',default=None)
     mlflow_config.add_argument('--experiment',default=None)
-    mlflow_config.add_argument('--auth', action='store_true', help="Indicate whether the remote mlflow tracking server requires authentication. If enable, please provide the credentials in 'mlflow_config.json'.", default=None)
+    mlflow_config.add_argument('--auth', action=argparse.BooleanOptionalAction, help="Indicate whether the remote mlflow tracking server requires authentication. If enable, please provide the credentials in 'mlflow_config.json'.", default=None)
     
     # General settings
     general_config = parser.add_argument_group("Global Settigns")
     general_config.add_argument('--framework', choices=config.framework_options, default=None)
+    general_config.add_argument('--sampling_strategy', choices=config.sampling_strategy_options, default=None)
+    general_config.add_argument('--SAGE_option', choices=config.SAGE_options, default=None)
+    general_config.add_argument('--sample_when_predict', action=argparse.BooleanOptionalAction, default=None)
     general_config.add_argument('--seed', type=int, default=None)
     general_config.add_argument('--device', default=None)
     general_config.add_argument('--tqdm', action="store_true", default=None)
     general_config.add_argument('--save_model', action="store_true", default=None)
     general_config.add_argument('--criterion', type=str, default=None, choices=["loss", "accuracy", "f1"])
+    general_config.add_argument('--num_epochs', type=int, default=None)
     general_config.add_argument('--patience', type=int, default=None)
     general_config.add_argument('--num_workers', type=int, default=None)
     
     
     # General hyperparameters
     hyperparameters = parser.add_argument_group("Global Hyperparameters")
-    hyperparameters.add_argument('--sampling_strategy', choices=config.sampling_strategy_options, default=None)
-    hyperparameters.add_argument('--SAGE_option', choices=config.SAGE_options, default=None)
-    hyperparameters.add_argument('--num_epochs', type=int, default=None)
     hyperparameters.add_argument('--batch_size', type=int, default=None)
     hyperparameters.add_argument('--lr', type=float, default=None)
     

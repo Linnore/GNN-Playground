@@ -19,12 +19,16 @@ class config:
     }
 
     general_config = {
-        "framework": "inductive",
+        "framework": "inductive", # Must be transductive or inductive
 
         "sampling_strategy": "SAGE",  # Must be choosen from sampling_strategy options
 
         # Used if sampling_strategy is SAGE; Must be choosen from SAGE_options
         "SAGE_option": "strict",
+
+        # Enable to use sampling strategy when predicting (val, test, inference)
+        # If disable, all hop neighbors will be used.
+        "sample_when_predict": True,
 
         "seed": 118010142,
         "device": "cpu",
@@ -55,6 +59,8 @@ class config:
                 Training nodes are cut off from validation nodes and testing nodes to form a training subgraph. However, when doing inference on the validation nodes and testing nodes, the edges  <Node_train, Node_val/Node_test>  and <Node_val, Node_test> can be used.
         - If sampling_strategy is "SAINT"
             TODO
+        - If sampling_strategy is "None"
+            This should only happen when the framework is transductive. All neighbors will be used, so the model behaves like GCN. 
     """
     framework_options = [
         "transductive",
@@ -62,7 +68,8 @@ class config:
     ]
     sampling_strategy_options = [
         "SAGE",  # use the inductive learning proposed by GraphSAGE
-        "SAINT"  # use the inductive learning proposed by GraphSAINT
+        "SAINT",  # use the inductive learning proposed by GraphSAINT
+        "None", # only useful when GCN-like behaviors are desired.
     ]
     SAGE_options = [
         "default",

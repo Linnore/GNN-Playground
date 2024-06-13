@@ -80,6 +80,10 @@ def get_loader_SAGE(data:Data, config):
     
     logger.info(f"\ntrain_data={train_data}\nval_data={val_data}\ntest_data={test_data}")
     
+    if general_config["sampling_strategy"] == "None":
+        logger.warning("Sampling strategy is set to be None. All neighbors will be used!")
+        num_neighbors = [-1] * model_config["num_layers"]
+        
     train_loader = NeighborLoader(
         train_data, 
         num_neighbors=num_neighbors,
@@ -87,6 +91,11 @@ def get_loader_SAGE(data:Data, config):
         input_nodes=train_data.train_mask,
         num_workers=general_config["num_workers"]
     )
+    
+    if not general_config["sample_when_predict"]:
+        logger.warning("sample_when_predict is set to be False. All neighbors will be used for aggregation when doing prediction in validation and testing.")
+        logger.warning("Sampling strategy is set to be None. All neighbors will be used!")
+        num_neighbors = [-1] * model_config["num_layers"]
     
     val_loader = NeighborLoader(
         val_data, 
