@@ -1,5 +1,8 @@
 """
 Configurations
+
+Priority of configuration:
+Command line arguments > configuraions in model["overwirte"] > other configuration.
 """
 
 
@@ -19,31 +22,32 @@ class config:
     }
 
     general_config = {
-        "framework": "inductive", # Must be transductive or inductive
+        "framework": "transductive", # Must be transductive or inductive
 
         "sampling_strategy": "SAGE",  # Must be choosen from sampling_strategy options
 
-        # Used if sampling_strategy is SAGE; Must be choosen from SAGE_options
-        "SAGE_option": "strict",
+        # Used if sampling_strategy is SAGE; Must be choosen from SAGE_inductive_options
+        "SAGE_inductive_option": "strict",
 
-        # Enable to use sampling strategy when predicting (val, test, inference)
-        # If disable, all hop neighbors will be used.
-        "sample_when_predict": True,
+        # Enable to use sampling strategy when predicting (val, test, inference). Default: False.
+        "sample_when_predict": False,
 
         "seed": 118010142,
         "device": "cpu",
         "tqdm": False,
         "save_model": True,
         "criterion": "loss",
-        "num_epochs": 400,
+        "num_epochs": 1000,
         "patience": 40,
         "num_workers": 0,
     }
 
     # Hyperparameters
     hyperparameters = {
-        "batch_size": 64,
-        "lr": 1e-3
+        # batch_size to infinity if memory allowed
+        "batch_size": 512, 
+        "lr": 5e-3,
+        "weight_decay": 0.0005 # L2 regularization
     }
 
     """Options for difference experiment settings
@@ -71,7 +75,7 @@ class config:
         "SAINT",  # use the inductive learning proposed by GraphSAINT
         "None", # only useful when GCN-like behaviors are desired.
     ]
-    SAGE_options = [
+    SAGE_inductive_options = [
         "default",
         "strict",
         "soft",
@@ -87,16 +91,52 @@ class config:
             "dropout": 0,
             "jk": None
         },
-
-
-        "GAT": {
-            "base_model": "GAT_PyG",
+        
+        "GraphSAGE-GCN-trans":{
+            "base_model": "GraphSAGE_PyG",
             "num_layers": 2,
-            "hidden_node_channels": 256,
+            "hidden_node_channels": 64,
+            "dropout": 0,
+        },
+
+        # Transductive benchmark GAT of Planetoid; 
+        # For PubMed: output_heads=8, lr=0.01, weight_decay=0.001
+        "GAT-benchmark-trans": {
+            "base_model": "GAT_Custom",
+            "overwrite": {
+                "framework": "transductive",
+                "sampling_strategy": None,
+                "batch_size": 999999,
+                "lr" : 5e-3,
+                "weighted_decay": 5e-4,
+            },
+            "hidden_node_channels_per_head": 8,
+            "num_layers": 2,
+            "heads": 8,
+            "output_haeds": 1,
+            "num_neighbors": [-1, -1],
+            "dropout": 0.6,
+            "jk": None,
+            "v2": False,
+        },
+        
+        "GAT-SAGE-trans": {
+            "base_model": "GAT_Custom",
+            "overwrite": {
+                "framework": "transductive",
+                "sampling_strategy": "SAGE",
+                "batch_size": 999999,
+                "lr" : 5e-3,
+                "weighted_decay": 5e-4,
+            },
+            "hidden_node_channels_per_head": 8,
+            "num_layers": 2,
+            "heads": 8,
+            "output_haeds": 1,
             "num_neighbors": [25, 10],
             "dropout": 0,
             "jk": None,
-            "v2": False
+            "v2": False,
         },
 
 

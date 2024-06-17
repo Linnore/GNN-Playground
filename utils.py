@@ -4,6 +4,7 @@ import requests
 import mlflow
 import torch_geometric
 import config
+import torch
 
 from loguru import logger
 
@@ -27,7 +28,7 @@ def create_parser(config:config):
     general_config = parser.add_argument_group("Global Settigns")
     general_config.add_argument('--framework', choices=config.framework_options, default=None)
     general_config.add_argument('--sampling_strategy', choices=config.sampling_strategy_options, default=None)
-    general_config.add_argument('--SAGE_option', choices=config.SAGE_options, default=None)
+    general_config.add_argument('--SAGE_inductive_option', choices=config.SAGE_inductive_options, default=None)
     general_config.add_argument('--sample_when_predict', action=argparse.BooleanOptionalAction, default=None)
     general_config.add_argument('--seed', type=int, default=None)
     general_config.add_argument('--device', default=None)
@@ -43,11 +44,14 @@ def create_parser(config:config):
     hyperparameters = parser.add_argument_group("Global Hyperparameters")
     hyperparameters.add_argument('--batch_size', type=int, default=None)
     hyperparameters.add_argument('--lr', type=float, default=None)
+    hyperparameters.add_argument('--weight_decay', type=float, default=None)
     
     # Model hyperparameters
     model_params = parser.add_argument_group("Model Hyperparameters")
+    model_params.add_argument('--hidden_node_channels_per_head', type=int, help='Number of hidden node channels per head.', default=None)
     model_params.add_argument('--num_layers', type=int, default=None)
-    model_params.add_argument('--hidden_node_channels', type=int, help='Number of hidden node channels.', default=None)
+    model_params.add_argument('--heads', type=int, default=None)
+    model_params.add_argument('--output_heads', type=int, default=None)
     model_params.add_argument('--num_neighbors', type=int, nargs="+", default=None)
     model_params.add_argument('--dropout', type=float, default=None)
     model_params.add_argument('--jk', type=str, default=None)
@@ -59,6 +63,9 @@ def create_parser(config:config):
 
 def set_global_seed(seed):
     torch_geometric.seed_everything(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    torch.backends.cudnn.deterministic = True 
+    torch.backends.cudnn.benchmark = False 
 
 
 def setup_mlflow(config):
@@ -98,14 +105,24 @@ def overwrite_config(config, key, value):
         config[key] = value
 
 
-def update_config(config:dict, vargs:dict):
+def update_config(config:dict, vargs:dict): 
+    config["model"] = vargs["model"]
+    config["mode"] = vargs["mode"]
+    config["dataset"] = vargs["dataset"]
+    
+    model_overwrite_config = config["model_collections"][config["model"]].pop("overwrite", {})
+    config = overwrite_config_from_vargs(config, model_overwrite_config)
+    
+    config = overwrite_config_from_vargs(config, vargs)
+    return config
+
+def overwrite_config_from_vargs(config:dict, vargs:dict): 
     for key, value in config.items():
         if type(value)==dict:
-            update_config(value, vargs)
+            overwrite_config_from_vargs(value, vargs)
         elif key in vargs:
             overwrite_config(config, key, vargs[key])
     return config
-        
 
 
 def setup_logger():

@@ -99,8 +99,21 @@ import-experiment \
   --input-dir /tmp/export
 ```
 
-One can also use the same export and import server to migrate runs between different experiments.
+#### Push Run
+One can also push a certain Run:
+```
+export MLFLOW_TRACKING_URI=http://127.0.0.1:8080
+export MLFLOW_TRACKING_USERNAME=username
+export MLFLOW_TRACKING_PASSWORD=password
 
+copy-run \
+  --run-id c0155e8287c14c2bb8cb9018930d8d99 \
+  --experiment-name dst-experiment \
+  --src-mlflow-uri http://127.0.0.1:8080 \
+  --dst-mlflow-uri http://127.0.0.1:8080
+```
+
+Note that current mlflow-export-import can only push a local run where the local server is without authentication to a remote server with authentication. Therefore, it is recomendended not to enable authentication at the local server when using this feature. 
 ### Pytorch Geometric Playground
 
 ```bash
@@ -136,9 +149,14 @@ python run_pyg.py train GraphSAGE-mean Cora --auth --device cpu
 - [ ] Pytorch Geometric
   - [-] GraphSAGE
     - [x] PyG's official implementation
-    - [ ] Customized implementation
+    - [ ] Customizable GraphSAGE
   - [-] GAT
     - [x] PyG's official implementation
+    - [-] Customizable GAT
+      - [x] Benchmark for Transductive Learning on Planetoid
+      - [ ] Benchmark for Inductive Learning on PPI
+      - [ ] Edge update
+    - [ ] 
   - [ ] GIN
 - [ ] Deep Graph Library
 - [ ] Other explorations.
