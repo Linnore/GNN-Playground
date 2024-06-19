@@ -5,8 +5,7 @@ import os
 import copy
 
 from .data_utils import get_loader
-from .model.GraphSAGE import GraphSAGE_PyG
-from .model.GAT import GAT_PyG, GAT_Custom
+from .train_utils import get_loss_fn, get_model
 
 from loguru import logger
 from torch_geometric.nn import summary
@@ -14,54 +13,7 @@ from tqdm import tqdm
 from sklearn.metrics import classification_report, f1_score
 
 
-def get_model(config):
-    model_config = config["model_collections"][config["model"]]
-    dataset_config = config["dataset_collections"][config["dataset"]]
-    match model_config.pop("base_model"):
-        case "GraphSAGE_PyG":
-            model = GraphSAGE_PyG(
-                in_channels=dataset_config["num_node_features"],
-                out_channels=dataset_config["num_classes"],
-                hidden_channels=model_config.pop("hidden_node_channels"),
-                num_layers=model_config.pop("num_layers"),
-                dropout=model_config.pop("dropout", 0),
-                jk=model_config.pop("jk", None),
-                **model_config,
-            )
-        case "GAT_PyG":
-            model = GAT_PyG(
-                in_channels=dataset_config["num_node_features"],
-                out_channels=dataset_config["num_classes"],
-                hidden_channels=model_config.pop("hidden_node_channels"),
-                num_layers=model_config.pop("num_layers"),
-                dropout=model_config.pop("dropout", 0),
-                jk=model_config.pop("jk", None),
-                **model_config,
-            )
-        case "GAT_Custom":
-            model = GAT_Custom(
-                in_channels=dataset_config["num_node_features"],
-                out_channels=dataset_config["num_classes"],
-                hidden_node_channels_per_head=model_config.pop(
-                    "hidden_node_channels_per_head"),
-                num_layers=model_config.pop("num_layers"),
-                heads=model_config.pop("heads", 8),
-                output_heads=model_config.pop("output_heads", 1),
-                dropout=model_config.pop("dropout", 0),
-                v2=model_config.pop("v2", None),
-                **model_config
-            )
-
-        case "GIN_PyG":
-            pass
-        case _:
-            logger.exception(
-                f"Unreconized base model: {model_config['base_model']}")
-
-    return model
-
-
-def run_step(mode: str, epoch, model, loss_fn, optimizer, loader, general_config):
+def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0):
     if mode == "test":
         model.eval()
     else:
@@ -74,15 +26,25 @@ def run_step(mode: str, epoch, model, loss_fn, optimizer, loader, general_config
 
     predictions = []
     truths = []
-    bar = tqdm(loader, total=len(loader), disable=not general_config["tqdm"])
+    bar = tqdm(loader, total=len(loader), disable=not enable_tqdm)
     for batch in bar:
         if mode == "train":
             optimizer.zero_grad()
 
-        targets = batch.y[:batch.batch_size]
-        outputs = model(batch.x, batch.edge_index)[:batch.batch_size]
+        if sampling_strategy in ["SAGE", None, "None"]:
+            mask = torch.arange(batch.batch_size, device=device)
+        elif sampling_strategy in ["GraphBatching"]:
+            mask = torch.ones(batch.x.shape[0], dtype=bool)
 
-        predictions.append(outputs.argmax(dim=-1))
+        targets = batch.y[mask]
+        outputs = model(batch.x.to(device), batch.edge_index.to(device))[mask]
+
+        if multilabel:
+            preds = outputs > threshold
+        else:
+            preds = outputs.argmax(dim=-1)
+
+        predictions.append(preds)
         truths.append(targets)
 
         if mode != "test":
@@ -110,9 +72,9 @@ def run_step(mode: str, epoch, model, loss_fn, optimizer, loader, general_config
     mlflow.log_metric(f"{mode} F1", f1, epoch)
 
     if mode == "train":
-        return loss, f1
+        return avg_loss, f1
     elif mode == "val":
-        return loss, f1
+        return avg_loss, f1
     elif mode == "test":
         return f1, truths, predictions
 
@@ -121,6 +83,7 @@ def train_gnn(config):
 
     general_config = config["general_config"]
     device = general_config["device"]
+    dataset_config = config["dataset_collections"][config["dataset"]]
 
     # Initialize MLflow Logging
     run_name = f"{config['model']}"
@@ -143,6 +106,9 @@ def train_gnn(config):
     # Get loaders
     train_loader, val_loader, test_loader = get_loader(config)
 
+    # Setup loss function
+    loss_fn = get_loss_fn(config, train_loader, reduction='mean')
+
     # Get model
     model = get_model(config)
     model.to(device).reset_parameters()
@@ -156,8 +122,8 @@ def train_gnn(config):
 
     # Summary logging
     sample_batch = next(iter(train_loader))
-    sample_x = sample_batch.x
-    sample_edge_index = sample_batch.edge_index
+    sample_x = sample_batch.x.to(device)
+    sample_edge_index = sample_batch.edge_index.to(device)
     summary_str = summary(model, sample_x, sample_edge_index)
     logger.info("Model Summary:\n" + summary_str)
     with open("logs/tmp/model_summary.txt", "w") as out_file:
@@ -165,11 +131,8 @@ def train_gnn(config):
     mlflow.log_artifact("logs/tmp/model_summary.txt")
 
     # Setup Optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"])
-
-    # Setup loss function
-    logger.warning('Todo: Implement WCE.')
-    loss_fn = torch.nn.CrossEntropyLoss(reduction='mean')
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"])
 
     # Setup metrics
     criterion = general_config["criterion"].lower()
@@ -182,25 +145,29 @@ def train_gnn(config):
     patience = general_config["patience"]
     if patience == None:
         patience = general_config["num_epochs"]
-        
-    
+
+    # Setup training steps according to task type
+    sampling_strategy = config["general_config"]["sampling_strategy"]
+    if dataset_config["task_type"] == "single-label-NC":
+        run_step = lambda *args, **kwargs: node_classification_step(*args, model=model, loss_fn=loss_fn, optimizer=optimizer, enable_tqdm=general_config["tqdm"], sampling_strategy=sampling_strategy, device=device, **kwargs)
+    elif dataset_config["task_type"] == "multi-label-NC":
+        run_step = lambda *args, **kwargs: node_classification_step(*args, model=model, loss_fn=loss_fn, optimizer=optimizer, enable_tqdm=general_config["tqdm"], sampling_strategy=sampling_strategy, device=device, multilabel=True, threshold=0, **kwargs)
+
     best_epoch = 0
     for epoch in range(1, 1+general_config["num_epochs"]):
         if general_config["tqdm"]:
             print(f"Epoch {epoch}:")
         # Batch training
-        train_loss, train_f1= run_step(
-            "train", epoch, model, loss_fn, optimizer, train_loader, general_config)
+        train_loss, train_f1 = run_step("train", epoch, train_loader)
 
         # Validation
-        val_loss, val_f1 = run_step(
-            "val", epoch, model, loss_fn, optimizer, val_loader, general_config)
+        val_loss, val_f1 = run_step("val", epoch, val_loader)
 
         # Test
-        test_f1, truths, predictions = run_step(
-            "test", epoch, model, loss_fn, optimizer, test_loader, general_config)
+        test_f1, truths, predictions = run_step("test", epoch, test_loader)
 
-        logger.info(f"Epoch {epoch}: train_loss={train_loss:<8.6g}, train_f1={train_f1:<8.6g}, val_loss={val_loss:<8.6g}, val_f1={val_f1:<8.6g}, test_f1={test_f1:<8.6g}")
+        logger.info(
+            f"Epoch {epoch}: train_loss={train_loss:<8.6g}, train_f1={train_f1:<8.6g}, val_loss={val_loss:<8.6g}, val_f1={val_f1:<8.6g}, test_f1={test_f1:<8.6g}")
 
         # Best model
         if criterion == "loss":

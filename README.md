@@ -150,10 +150,14 @@ python run_pyg.py train GraphSAGE-mean Cora --auth --device cpu
   - [-] GraphSAGE
     - [x] PyG's official implementation
     - [ ] Customizable GraphSAGE
+      - [x] Benchmark for Transductive Learning on Planetoid
+      - [ ] Benchmark for Inductive Learning on SAINT paper datasets.
+      - [ ] Benchmark for Inductive Learning on PPI
   - [-] GAT
     - [x] PyG's official implementation
     - [-] Customizable GAT
       - [x] Benchmark for Transductive Learning on Planetoid
+      - [ ] Benchmark for Inductive Learning on SAINT paper datasets.
       - [ ] Benchmark for Inductive Learning on PPI
       - [ ] Edge update
     - [ ] 

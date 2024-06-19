@@ -92,16 +92,20 @@ def setup_mlflow(config):
             
     
 def init_config():
-    # with open("config.json", "r") as config_file:
-    #     config = json.load(config_file)
     from config import config
     return config
 
 
+message_set = set()
+
 def overwrite_config(config, key, value):
+    global message_set
     if value != None:
         if value != config[key]:
-            logger.warning(f'Overwrite {key}={value} from {key}={config[key]}')
+            message = f'Overwrite {key}={value} from {key}={config[key]}'
+            if not message in message_set:
+                message_set.add(message)
+                logger.warning(f'Overwrite {key}={value} from {key}={config[key]}')
         config[key] = value
 
 
@@ -124,7 +128,7 @@ def overwrite_config_from_vargs(config:dict, vargs:dict):
             overwrite_config(config, key, vargs[key])
     return config
 
-
+    
 def setup_logger():
     log_dir = "logs"
     tmp_dir = "logs/tmp"
