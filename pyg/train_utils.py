@@ -47,7 +47,7 @@ def get_model(config):
             model = GAT_PyG(
                 in_channels=dataset_config["num_node_features"],
                 out_channels=dataset_config["num_classes"],
-                hidden_channels=model_config.pop("hidden_node_channels_per_head"),
+                hidden_channels=model_config.pop("hidden_node_channels"),
                 num_layers=model_config.pop("num_layers"),
                 heads=model_config.pop("heads", 8),
                 dropout=model_config.pop("dropout", 0),

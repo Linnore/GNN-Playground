@@ -11,14 +11,13 @@ def main():
     config = init_config()
     
     # Setup arguments
-    parser = create_parser(config)
-    args = parser.parse_args()
+    args = create_parser(config)
     
     # Update configurations 
     config = update_config(dict(vars(config)), vars(args))
 
     # Setup logger
-    setup_logger()
+    setup_logger(args)
     
     
     # Setup MLflow

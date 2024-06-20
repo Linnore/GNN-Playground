@@ -4,6 +4,8 @@ import pprint
 import os
 import copy
 
+import numpy as np
+
 from .data_utils import get_loader
 from .train_utils import get_loss_fn, get_model
 
@@ -11,6 +13,10 @@ from loguru import logger
 from torch_geometric.nn import summary
 from tqdm import tqdm
 from sklearn.metrics import classification_report, f1_score
+
+from mlflow import MlflowClient
+from mlflow.models.signature import ModelSignature
+from mlflow.types.schema import Schema, TensorSpec
 
 
 def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0):
@@ -84,9 +90,12 @@ def train_gnn(config):
     general_config = config["general_config"]
     device = general_config["device"]
     dataset_config = config["dataset_collections"][config["dataset"]]
+    model_config = config["model_collections"][config["model"]]
+    register_info = model_config.pop("register_info", {})
 
     # Initialize MLflow Logging
-    run_name = f"{config['model']}"
+    run_name = f"{config['model']}-{config['dataset']}"
+    model_name = run_name
     run = mlflow.start_run(run_name=run_name)
     mlflow.set_tag(
         "base model", config["model_collections"][config["model"]]["base_model"])
@@ -149,9 +158,11 @@ def train_gnn(config):
     # Setup training steps according to task type
     sampling_strategy = config["general_config"]["sampling_strategy"]
     if dataset_config["task_type"] == "single-label-NC":
-        run_step = lambda *args, **kwargs: node_classification_step(*args, model=model, loss_fn=loss_fn, optimizer=optimizer, enable_tqdm=general_config["tqdm"], sampling_strategy=sampling_strategy, device=device, **kwargs)
+        run_step = lambda *args, **kwargs: node_classification_step(*args, model=model, loss_fn=loss_fn, optimizer=optimizer,
+                                                                    enable_tqdm=general_config["tqdm"], sampling_strategy=sampling_strategy, device=device, **kwargs)
     elif dataset_config["task_type"] == "multi-label-NC":
-        run_step = lambda *args, **kwargs: node_classification_step(*args, model=model, loss_fn=loss_fn, optimizer=optimizer, enable_tqdm=general_config["tqdm"], sampling_strategy=sampling_strategy, device=device, multilabel=True, threshold=0, **kwargs)
+        run_step = lambda *args, **kwargs: node_classification_step(*args, model=model, loss_fn=loss_fn, optimizer=optimizer,
+                                                                    enable_tqdm=general_config["tqdm"], sampling_strategy=sampling_strategy, device=device, multilabel=True, threshold=0, **kwargs)
 
     best_epoch = 0
     for epoch in range(1, 1+general_config["num_epochs"]):
@@ -200,9 +211,52 @@ def train_gnn(config):
 
     model.load_state_dict(best_model_state_dict)
     if general_config["save_model"]:
-        mlflow.pytorch.log_model(model, "Best Model")
+
+        input_schema = Schema(
+            [
+                TensorSpec(np.dtype(np.float32), (-1, dataset_config["num_node_features"]), "x"),
+                TensorSpec(np.dtype(np.int64), (2, -1), "edge_index")
+            ]
+        )
+        output_schema = Schema([TensorSpec(np.dtype(np.float32), (-1, dataset_config["num_classes"]))])
+        
+
+        mlflow.pytorch.log_model(model,
+                                 model_name,
+                                 signature=ModelSignature(inputs=input_schema, outputs=output_schema),
+                                 )
         mlflow.log_artifact(save_path, "Optimizer States")
         os.remove(save_path)
+
+        logger.debug(register_info)
+
+        # Register the model
+        model_uri = f"runs:/{run.info.run_id}/{model_name}"
+        reg_model = mlflow.register_model(
+            model_uri=model_uri,
+            name=model_name,
+            tags=register_info.get("tags", {})
+        )
+
+        # Write inference instructions as description
+        desc = [register_info.get("description")] if register_info.get("description") else []
+        desc.extend([
+            "Use the following codes for inference:",
+            "```python",
+            "from mlflow.pytorch import load_model as load_pyt_model",
+            f"loaded_model = load_pyt_model('{model_uri}')",
+            "output = loaded_model(**input)",
+            "```"
+        ])
+        desc = "\n".join(desc)
+        
+        client = MlflowClient()
+        client.update_model_version(
+            name=model_name,
+            version=reg_model.version,
+            description=desc
+        )
+        logger.success(f"Model registered as {model_name}, version {reg_model.version}")
 
     with open("logs/tmp/test_report.txt", "w") as out_file:
         out_file.write(best_report)

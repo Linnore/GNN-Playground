@@ -86,7 +86,6 @@ export-experiment \
 
 ```
 
-
 Say the remote MLflow tracking URI is `http://127.0.0.1:8001` and it requires authentication, then run the following commands for submission:
 ```bash
 
@@ -99,21 +98,59 @@ import-experiment \
   --input-dir /tmp/export
 ```
 
-#### Push Run
+#### Migrate Run
 One can also push a certain Run:
 ```
 export MLFLOW_TRACKING_URI=http://127.0.0.1:8080
-export MLFLOW_TRACKING_USERNAME=username
+export MLFLOW_TRACKING_USERNAME=admin
 export MLFLOW_TRACKING_PASSWORD=password
 
 copy-run \
-  --run-id c0155e8287c14c2bb8cb9018930d8d99 \
-  --experiment-name dst-experiment \
+  --run-id 59775138e6cb465a92b90828f68d2a8b \
+  --experiment-name benchmark \
   --src-mlflow-uri http://127.0.0.1:8080 \
   --dst-mlflow-uri http://127.0.0.1:8080
 ```
 
 Note that current mlflow-export-import can only push a local run where the local server is without authentication to a remote server with authentication. Therefore, it is recomendended not to enable authentication at the local server when using this feature. 
+
+#### Migrate Registered Models
+Use the following scripts to migrate a registered model:
+```bash
+export MLFLOW_TRACKING_URI=http://127.0.0.1:8080
+export MLFLOW_TRACKING_USERNAME=admin
+export MLFLOW_TRACKING_PASSWORD=password
+
+export MLFLOW_TRACKING_URI=http://127.0.0.1:8080
+export-model \
+  --model GAT-benchmark-trans-Cora \
+  --output-dir logs/tmp/out
+```
+
+```bash
+export MLFLOW_TRACKING_URI=http://127.0.0.1:8080
+export MLFLOW_TRACKING_USERNAME=admin
+export MLFLOW_TRACKING_PASSWORD=password
+
+import-model \
+  --input-dir logs/tmp/out  \
+  --model GAT-benchmark-trans-Cora-imported \
+  --experiment-name sklearn_wine_imported \
+  --delete-model True
+```
+
+##### import-model has bugs
+Quick fix: `.../anaconda3/envs/mlflow/lib/python3.10/site-packages/mlflow_export_import/model_version/import_model_version.py` at line 109
+```python
+if not dst_source.startswith(("dbfs:","s3:","mlflow-artifacts:")) and not os.path.exists(dst_source):
+        raise MlflowExportImportException(f"'source' argument for MLflowClient.create_model_version does not exist: {dst_source}", http_status_code=404)
+```
+
+
+#### Authentication Issue:
+The current `mlflow-export-import` does not implement proper authentication for the http-client. If authentication errors occur when using this tool, please check [the solution here](https://github.com/mlflow/mlflow-export-import/issues/158) by modifying the source codes of corresponding header.
+
+
 ### Pytorch Geometric Playground
 
 ```bash

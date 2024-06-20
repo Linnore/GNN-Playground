@@ -78,6 +78,7 @@ class config:
     sampling_strategy_options = [
         "SAGE",  # use the inductive learning proposed by GraphSAGE
         "SAINT",  # use the inductive learning proposed by GraphSAINT
+        "GraphBatching", # use for inductive learning with full graph
         "None", # only useful when GCN-like behaviors are desired.
     ]
     SAGE_inductive_options = [
@@ -87,27 +88,26 @@ class config:
     ]
 
     # Model collections. Create the configuration of each model here.
-    model_collections = {
-        "GraphSAGE-mean": {
-            "base_model": "GraphSAGE_PyG",
-            "num_layers": 2,
-            "num_neighbors": [25, 10],
-            "hidden_node_channels": 256,
-            "dropout": 0,
-            "jk": None
-        },
-        
-        "GraphSAGE-GCN-benchmark-trans":{
+    model_collections = {        
+        "GraphSAGE-benchmark-trans":{
             "base_model": "GraphSAGE_PyG",
             "overwrite": {
                 "framework": "transductive",
-                "sampling_strategy": "None",
+                "sampling_strategy": "SAGE",
                 "lr" : 5e-3,
                 "weight_decay": 5e-4,
             },
+            # Registeration inforamtion for MLflow
+            "register_info":{
+                "description": "Benchmark GraphSAGE.",
+                "tags": {
+                    "aggr":"mean", 
+                    }, 
+            },
             "num_layers": 2,
+            "num_neighbors": [25, 10],
             "hidden_node_channels": 64,
-            "dropout": 0.6,
+            "dropout": 0,
             "aggr": "mean",
         },
 
@@ -120,6 +120,13 @@ class config:
                 "sampling_strategy": "None",
                 "lr" : 5e-3,
                 "weight_decay": 5e-4,
+            },
+            # Registeration inforamtion for MLflow
+            "register_info":{
+                "description": "Benchmark model from GAT paper.",
+                "tags": {
+                    "GATConv":"v1", # Change to v2 if v2 is True
+                    }, 
             },
             "hidden_node_channels_per_head": 8,
             "num_layers": 2,
@@ -159,6 +166,13 @@ class config:
                 "lr" : 5e-3,
                 "weight_decay": 0,
             },
+            # Registeration inforamtion for MLflow
+            "register_info":{
+                "description": "Benchmark model from GAT paper.",
+                "tags": {
+                    "GATConv":"v1", # Change to v2 if v2 is True
+                    }, 
+            },
             "num_layers": 3,
             "heads": [4, 4],
             "hidden_node_channels_per_head": [256, 256],
@@ -180,11 +194,30 @@ class config:
             },
             "num_layers": 3,
             "heads": 4,
-            "hidden_node_channels_per_head": 256,
+            "hidden_node_channels": 1024,
             "dropout": 0,
             "jk": None,
             "v2": False,
         },
+        
+        # Equivalent to GAT with equal attention + jk.
+        # TODO: Customizable GraphSAGE with skip-connection
+        "GAT-Equal-benchmark-in":{
+            "base_model": "GraphSAGE_PyG",
+            "overwrite": {
+                "framework": "inductive",
+                "sampling_strategy": "GraphBatching",
+                "batch_size": 2,
+                "lr" : 5e-3,
+                "weight_decay": 0,
+            },
+            "num_layers": 3,
+            "hidden_node_channels": 1024,
+            "dropout": 0,
+            "aggr": "mean",
+            "jk": "cat"
+        },
+                
         "GIN": {
 
         }
