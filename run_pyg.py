@@ -4,6 +4,7 @@ from loguru import logger
 from utils import create_parser, set_global_seed, setup_mlflow, setup_logger, init_config, update_config
 from pyg.train import train_gnn
 from pyg.inference import infer_gnn
+from pyg.evaluate import eval_gnn
 
 def main():
     
@@ -29,8 +30,10 @@ def main():
     if args.mode == 'train':
         train_gnn(config)
     
+    if args.mode == 'evaluate':
+        eval_gnn(config)
+    
     elif args.mode == 'inference':
-        logger.info("Start Inference")
         infer_gnn(config)
     
     

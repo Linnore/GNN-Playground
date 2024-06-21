@@ -1,4 +1,5 @@
 import torch
+import copy
 
 from loguru import logger
 from .model.GraphSAGE import GraphSAGE_PyG
@@ -15,7 +16,7 @@ def get_class_pos_weights(dataset_config, train_loader):
         
 
 def get_loss_fn(config, train_loader, reduction="sum"):
-    dataset_config = config["dataset_collections"][config["dataset"]]
+    dataset_config = config["dataset_config"]
     if dataset_config["task_type"] == "single-label-NC":
         return torch.nn.CrossEntropyLoss(reduction=reduction)
     
@@ -28,10 +29,24 @@ def get_loss_fn(config, train_loader, reduction="sum"):
     else:
         logger.exception(NotImplementedError("Unsupported task type!"))
     
+def filter_config_for_archive(config):
+    archive_config = {
+        "general_config": copy.deepcopy(config["general_config"]),
+        "model_config": copy.deepcopy(config["model_config"]),
+        "dataset_config": copy.deepcopy(config["dataset_config"]),
+        "hyperparameters": copy.deepcopy(config["hyperparameters"]),
+    }
+    
+    return archive_config
 
 def get_model(config):
-    model_config = config["model_collections"][config["model"]]
-    dataset_config = config["dataset_collections"][config["dataset"]]
+    archive_config = filter_config_for_archive(config)
+    
+    model_config = config["model_config"]
+    model_config.pop("num_neighbors", -1)
+    
+    dataset_config = config["dataset_config"]
+    
     match model_config.pop("base_model"):
         case "GraphSAGE_PyG":
             model = GraphSAGE_PyG(
@@ -41,6 +56,7 @@ def get_model(config):
                 num_layers=model_config.pop("num_layers"),
                 dropout=model_config.pop("dropout", 0),
                 jk=model_config.pop("jk", None),
+                config=archive_config,
                 **model_config,
             )
         case "GAT_PyG":
@@ -53,6 +69,7 @@ def get_model(config):
                 dropout=model_config.pop("dropout", 0),
                 v2=model_config.pop("v2", None),
                 jk=model_config.pop("jk", None),
+                config=archive_config,
                 **model_config,
             )
         case "GAT_Custom":
@@ -67,6 +84,7 @@ def get_model(config):
                 dropout=model_config.pop("dropout", 0),
                 v2=model_config.pop("v2", None),
                 jk=model_config.pop("jk", None),
+                config=archive_config,
                 **model_config
             )
 

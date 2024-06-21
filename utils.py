@@ -14,7 +14,13 @@ def add_train_parser(subparsers: argparse._SubParsersAction, parent_parser: argp
 
     parser = subparsers.add_parser(
         "train", help="Train a model on a dataset.", parents=[parent_parser])
-
+    
+    # Required Field
+    parser.add_argument(
+        'model', choices=list(config.model_collections.keys()))
+    parser.add_argument('dataset', choices=list(
+        config.dataset_collections.keys()))
+    
     # General settings
     general_config = parser.add_argument_group("Global Settigns")
     general_config.add_argument(
@@ -56,10 +62,62 @@ def add_train_parser(subparsers: argparse._SubParsersAction, parent_parser: argp
     model_params.add_argument('--v2', action="store_true", default=None)
 
 
-def add_inference_parser(subparsers, parent_parser, config):
+def add_inference_parser(subparsers: argparse._SubParsersAction, parent_parser: argparse.ArgumentParser, config: config):
     parser = subparsers.add_parser(
-        "inference", help="Inference a model on a dataset's test split.", parents=[parent_parser])
+        "inference", help="Inference on a dataset's test split using a registered mlflow model.", parents=[parent_parser])
+    
+    # Required Field
+    parser.add_argument('dataset', choices=list(
+        config.dataset_collections.keys()))
+    
+    parser.add_argument(
+        '--model', help="Model name of the registerted model to evaluate.")
+    
+    parser.add_argument('--version', type=int, default=None, help='Use the latest version if not specified.')
+    
+    parser.add_argument('--split', choices=["train", "val", "test", "unlabelled"], default="test", help='Select the split of the data set to predict. Supported values [train, val, test] for labelled split, and [unlabelled] for unlabelled split. The dataset should be able to loaded as a pytorch geometric dataset, and each data object has the attribute {split_name}_mask to get the split for inference. ')
+    parser.add_argument('--output_dir', default="./output")
+    
+    # General settings
+    general_config = parser.add_argument_group("Global Settigns")
+    general_config.add_argument(
+        '--framework', choices=config.framework_options, default=None)
+    general_config.add_argument(
+        '--sampling_strategy', choices=config.sampling_strategy_options, default=None)
+    general_config.add_argument(
+        '--SAGE_inductive_option', choices=config.SAGE_inductive_options, default=None)
+    general_config.add_argument(
+        '--sample_when_predict', action=argparse.BooleanOptionalAction, default=None)
+    general_config.add_argument('--seed', type=int, default=None)
+    general_config.add_argument('--device', default=None)
+    general_config.add_argument('--tqdm', action="store_true", default=None)
 
+def add_evaluate_parser(subparsers: argparse._SubParsersAction, parent_parser: argparse.ArgumentParser, config: config):
+    parser = subparsers.add_parser(
+        "evaluate", help="Evaluate a registered model on a dataset", parents=[parent_parser])
+    
+    # Required Field
+    parser.add_argument('dataset', choices=list(
+        config.dataset_collections.keys()))
+    
+    parser.add_argument(
+        '--model', help="Model name of the registerted model to evaluate.")
+    parser.add_argument('--version', type=int, default=None, help='Use the latest version if not specified.')
+    
+    # General settings
+    general_config = parser.add_argument_group("Global Settigns")
+    general_config.add_argument(
+        '--framework', choices=config.framework_options, default=None)
+    general_config.add_argument(
+        '--sampling_strategy', choices=config.sampling_strategy_options, default=None)
+    general_config.add_argument(
+        '--SAGE_inductive_option', choices=config.SAGE_inductive_options, default=None)
+    general_config.add_argument(
+        '--sample_when_predict', action=argparse.BooleanOptionalAction, default=None)
+    general_config.add_argument('--seed', type=int, default=None)
+    general_config.add_argument('--device', default=None)
+    general_config.add_argument('--tqdm', action="store_true", default=None)
+    
 
 def create_parser(config: config):
     parser = argparse.ArgumentParser(
@@ -68,12 +126,6 @@ def create_parser(config: config):
     # Parser for common arguments
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument('--debug', action="store_true")
-
-    # Required field
-    parent_parser.add_argument(
-        'model', choices=list(config.model_collections.keys()))
-    parent_parser.add_argument('dataset', choices=list(
-        config.dataset_collections.keys()))
 
     # MLflow settings
     mlflow_config = parent_parser.add_argument_group('MLflow configuration')
@@ -87,6 +139,7 @@ def create_parser(config: config):
     # Create subparsers
     subparsers = parser.add_subparsers(dest="mode", required=True)
     add_train_parser(subparsers, parent_parser, config)
+    add_evaluate_parser(subparsers, parent_parser, config)
     add_inference_parser(subparsers, parent_parser, config)
 
     args = parser.parse_args()
@@ -120,8 +173,6 @@ def setup_mlflow(config):
             logger.exception(
                 f"Failed to log in to the MLFlow server at {mlflow_config['tracking_uri']}!")
 
-    logger.info(f"Launching experiment: {mlflow_config['experiment']}")
-    mlflow.set_experiment(mlflow_config["experiment"])
 
 
 def init_config():
@@ -145,15 +196,25 @@ def overwrite_config(config, key, value):
 
 
 def update_config(config: dict, vargs: dict):
-    config["model"] = vargs["model"]
     config["mode"] = vargs["mode"]
+    config["model"] = vargs["model"] 
     config["dataset"] = vargs["dataset"]
 
-    model_overwrite_config = config["model_collections"][config["model"]].pop(
-        "overwrite", {})
-    config = overwrite_config_from_vargs(config, model_overwrite_config)
+    if config["mode"] == "train":
+        model_overwrite_config = config["model_collections"][config["model"]].pop(
+            "overwrite", {})
+        config = overwrite_config_from_vargs(config, model_overwrite_config)
+
 
     config = overwrite_config_from_vargs(config, vargs)
+    
+    if config["mode"] == "train":
+        config["model_config"] = config["model_collections"][config["model"]]
+        
+    config["dataset_config"] = config["dataset_collections"][config["dataset"]]
+    
+    config["vargs"] = vargs
+    
     return config
 
 

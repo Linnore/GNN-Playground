@@ -7,3 +7,5 @@ dataset/*
 __pycache__/
 *.py[cod]
 .vscode/*
+output/*
+registered_models/*

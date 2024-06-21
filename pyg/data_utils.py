@@ -4,6 +4,7 @@ import torch_geometric.transforms as T
 from torch_geometric.data import Data, Batch
 from torch_geometric.loader import NeighborLoader, DataLoader
 
+from copy import deepcopy
 from loguru import logger
 
 
@@ -21,25 +22,26 @@ def merge_from_data_list(data_list):
 
 def get_data_SAGE(config):
     transform = T.Compose([T.NormalizeFeatures()])
-    if config["dataset"] in ['Cora', 'CiteSeer', 'PubMed']:
+    dataset = config["dataset"]
+    if dataset in ['Cora', 'CiteSeer', 'PubMed']:
         from torch_geometric.datasets import Planetoid
-        dataset = Planetoid('dataset', config["dataset"], split='public', transform=transform)
-    elif config["dataset"] == "Reddit":
+        dataset = Planetoid('dataset', dataset, split='public', transform=transform)
+    elif dataset == "Reddit":
         from torch_geometric.datasets import Reddit
         dataset = Reddit('dataset/Reddit', transform=transform)
-    elif config["dataset"] == "Reddit2":
+    elif dataset == "Reddit2":
         from torch_geometric.datasets import Reddit2
         dataset = Reddit2('dataset/Reddit2', transform=transform)
-    elif config["dataset"] == "Flickr":
+    elif dataset == "Flickr":
         from torch_geometric.datasets import Flickr
         dataset = Flickr('dataset/Flickr', transform=transform)
-    elif config["dataset"] == " Yelp":
+    elif dataset == " Yelp":
         from torch_geometric.datasets import Yelp
         dataset = Yelp('dataset/Yelp', transform=transform)
-    elif config["dataset"] == "AmazonProducts":
+    elif dataset == "AmazonProducts":
         from torch_geometric.datasets import AmazonProducts
         dataset = AmazonProducts('dataset/AmazonProducts', transform=transform)
-    elif config["dataset"] == "PPI":
+    elif dataset == "PPI":
         from torch_geometric.datasets import PPI
         dataset = [
             merge_from_data_list(PPI('dataset/PPI', split='train')),
@@ -59,7 +61,6 @@ def get_data_SAGE(config):
             train_data = data
             val_data = data
             test_data = data
-            general_config.pop("SAGE_inductive_option")
 
         elif general_config["framework"] == "inductive":
             if general_config["SAGE_inductive_option"] in ["default", "strict"]:
@@ -87,7 +88,7 @@ def get_data_SAGE(config):
 
 
 def get_data_SAINT(config):
-    dataset_config = config["dataset_collections"][config["dataset"]]
+    dataset_config = config["dataset_config"]
     logger.exception('Not Implemented.')
 
 
@@ -103,8 +104,8 @@ def get_data_graph_batch(config):
     
 
 def get_loader_SAGE(train_data, val_data, test_data, config):
-    model_config = config["model_collections"][config["model"]]
-    num_neighbors = model_config.pop("num_neighbors")
+    model_config = config["model_config"]
+    num_neighbors = model_config.get("num_neighbors", -1)
     if type(num_neighbors) == int:
         num_neighbors = [num_neighbors] * model_config["num_layers"]
     elif type(num_neighbors) == list:
@@ -158,12 +159,11 @@ def get_loader_SAINT(data: Data, config):
 
 
 def get_loader_no_sampling(train_data, val_data, test_data, config):
-    model_config = config["model_collections"][config["model"]]
+    model_config = config["model_config"]
 
     logger.warning(
         "Sampling strategy is set to be None. Full graph will be used without mini-batching! Batch_size is ignored! ")
     num_neighbors = [-1] * model_config["num_layers"]
-    model_config.pop("num_neighbors", None)
 
     general_config = config["general_config"]
 
@@ -242,3 +242,120 @@ def get_loader(config):
         return get_loader_graph_batch(*get_data_graph_batch(config), config)
     elif sampling_strategy == 'None' or sampling_strategy == None:
         return get_loader_no_sampling(*get_data_SAGE(config), config)
+
+def get_inference_data_SAGE(config):
+    dataset = config["dataset"]
+    if dataset in [
+        "Cora",
+        "CiteSeer",
+        "PubMed",
+        "Reddit",
+        "Reddit2",
+        "Flickr",
+        "Yelp",
+        "AmazonProducts",
+        "PPI",
+    ]:
+        train_data, val_data, test_data = get_data_SAGE(config)
+    else:
+        logger.info("TODO: support custom dataset.")
+        unlabelled_data = None
+        raise NotImplementedError
+    
+    split = config["vargs"]["split"]
+    
+    match split:
+        case "train":
+            train_data.infer_mask = train_data.train_mask
+            return train_data
+        case "val":
+            val_data.infer_mask = val_data.val_mask
+            return val_data
+        case "test":
+            test_data.infer_mask = test_data.test_mask
+            return test_data
+        case "unlabelled":
+            unlabelled_data.infer_mask = torch.ones(unlabelled_data.num_nodes, dtype=int)
+            return unlabelled_data
+    
+def get_inference_data_SAINT(config):
+    pass
+
+def get_inference_data_graph_batch(config):
+    pass
+
+def get_inference_loader_SAGE(infer_data:Data, config:dict):
+    model_config = config["model_config"]
+    num_neighbors = model_config.get("num_neighbors", -1)
+    if type(num_neighbors) == int:
+        num_neighbors = [num_neighbors] * model_config["num_layers"]
+    elif type(num_neighbors) == list:
+        num_neighbors = num_neighbors
+        assert len(num_neighbors) == model_config["num_layers"]
+
+    params = config["hyperparameters"]
+    
+    general_config = config["general_config"]
+
+    logger.info(
+        f"\ninference_data={infer_data}")
+
+    if not general_config["sample_when_predict"]:
+        logger.warning(
+            "sample_when_predict is set to be False. All neighbors will be used for aggregation when doing prediction in validation and testing.")
+        num_neighbors = [-1] * model_config["num_layers"]
+
+    infer_loader = NeighborLoader(
+        infer_data,
+        num_neighbors=num_neighbors.copy(),
+        batch_size=params["batch_size"],
+        input_nodes=infer_data.infer_mask,
+        num_workers=general_config["num_workers"],
+        persistent_workers=general_config["persistent_workers"],
+    )
+
+    return infer_data, infer_loader
+
+def get_inference_loader_SAINT(data:Data, config:dict):
+    pass
+
+def get_inference_loader_no_sampling(infer_data:Data, config:dict):
+    model_config = config["model_config"]
+    num_neighbors = [-1] * model_config["num_layers"]
+    
+    general_config = config["general_config"]
+
+    logger.info(
+        f"\ninference_data={infer_data}")
+
+    if not general_config["sample_when_predict"]:
+        logger.warning(
+            "sample_when_predict is set to be False. All neighbors will be used for aggregation when doing prediction in validation and testing.")
+        num_neighbors = [-1] * model_config["num_layers"]
+
+    infer_loader = NeighborLoader(
+        infer_data,
+        num_neighbors=num_neighbors.copy(),
+        batch_size=infer_data.num_nodes,
+        input_nodes=infer_data.infer_mask,
+        num_workers=general_config["num_workers"],
+        persistent_workers=general_config["persistent_workers"],
+    )
+
+    return infer_data, infer_loader
+
+
+def get_inference_loader_graph_batch(data:Data, config:dict):
+    pass
+
+
+def get_inference_loader(config):
+    sampling_strategy = config["general_config"]["sampling_strategy"]
+    if sampling_strategy == 'SAGE':
+        return get_inference_loader_SAGE(get_inference_data_SAGE(config), config)
+    elif sampling_strategy == 'SAINT':
+        return get_inference_loader_SAINT(get_inference_data_SAINT(config), config)
+    elif sampling_strategy == 'GraphBatching':
+        return get_inference_loader_graph_batch(get_inference_data_graph_batch(config), config)
+    elif sampling_strategy == 'None' or sampling_strategy == None:
+        return get_inference_loader_no_sampling(get_inference_data_SAGE(config), config)

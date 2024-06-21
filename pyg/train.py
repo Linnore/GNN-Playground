@@ -38,11 +38,11 @@ def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer
             optimizer.zero_grad()
 
         if sampling_strategy in ["SAGE", None, "None"]:
-            mask = torch.arange(batch.batch_size, device=device)
+            mask = torch.arange(batch.batch_size)
         elif sampling_strategy in ["GraphBatching"]:
             mask = torch.ones(batch.x.shape[0], dtype=bool)
 
-        targets = batch.y[mask]
+        targets = batch.y[mask] # on cpu
         outputs = model(batch.x.to(device), batch.edge_index.to(device))[mask]
 
         if multilabel:
@@ -68,7 +68,7 @@ def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer
 
     # Metrics
     predictions = torch.cat(predictions, dim=0).detach().cpu().numpy()
-    truths = torch.cat(truths, dim=0).detach().cpu().numpy()
+    truths = torch.cat(truths, dim=0).detach().numpy()
 
     if mode != "test":
         avg_loss = total_loss/total_num
@@ -86,25 +86,27 @@ def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer
 
 
 def train_gnn(config):
-
+    mlflow_config = config["mlflow_config"]
     general_config = config["general_config"]
     device = general_config["device"]
-    dataset_config = config["dataset_collections"][config["dataset"]]
-    model_config = config["model_collections"][config["model"]]
+    dataset_config = config["dataset_config"]
+    model_config = config["model_config"]
     register_info = model_config.pop("register_info", {})
 
     # Initialize MLflow Logging
+    logger.info(f"Launching experiment: {mlflow_config['experiment']}")
+    mlflow.set_experiment(mlflow_config["experiment"])
     run_name = f"{config['model']}-{config['dataset']}"
     model_name = run_name
     run = mlflow.start_run(run_name=run_name)
     mlflow.set_tag(
-        "base model", config["model_collections"][config["model"]]["base_model"])
+        "base model", model_config["base_model"])
     mlflow.set_tag("dataset", config["dataset"])
     logger.info(f"Launching run: {run.info.run_name}")
 
     # Log hyperparameters
     params = config["hyperparameters"]
-    params.update(config["model_collections"][config["model"]])
+    params.update(model_config)
     params_str = pprint.pformat(params)
     general_config_str = pprint.pformat(general_config)
     logger.info(f"General configurations:\n{general_config_str}")
@@ -115,12 +117,12 @@ def train_gnn(config):
     # Get loaders
     train_loader, val_loader, test_loader = get_loader(config)
 
-    # Setup loss function
-    loss_fn = get_loss_fn(config, train_loader, reduction='mean')
-
     # Get model
     model = get_model(config)
     model.to(device).reset_parameters()
+    
+    # Setup loss function
+    loss_fn = get_loss_fn(config, train_loader, reduction='mean')
 
     # Setup save directory for optimizer states
     if general_config["save_model"]:
@@ -258,10 +260,11 @@ def train_gnn(config):
         )
         logger.success(f"Model registered as {model_name}, version {reg_model.version}")
 
+    # Save report
+    logger.info(f"Best model report:\n{best_report}")
     with open("logs/tmp/test_report.txt", "w") as out_file:
         out_file.write(best_report)
     mlflow.log_artifact("logs/tmp/test_report.txt")
 
-    logger.info(f"Best model report:\n{best_report}")
 
     mlflow.end_run()

@@ -5,15 +5,15 @@ from loguru import logger
 
 from torch.nn import Linear, Identity, ModuleList
 
-from torch_geometric.nn.models import GAT as GAT_PyG
+from torch_geometric.nn.models import GAT as GAT_Base
 from torch_geometric.nn.models import JumpingKnowledge
 from torch_geometric.nn import GATConv, GATv2Conv
 
 
-class GATe(GAT_PyG):
-    def __init__(self, *args, **kwargs):
-        super.__init__(self, *args, **kwargs)
-        raise NotImplementedError
+class GAT_PyG(GAT_Base):
+    def __init__(self, config={}, *arg, **kwargs):
+        super().__init__(*arg, **kwargs)
+        self.config = config
 
 
 class GAT_Custom(torch.nn.Module):
@@ -27,9 +27,12 @@ class GAT_Custom(torch.nn.Module):
                  dropout: float = 0.6,
                  jk=None,
                  skip_connection: bool = False,
+                 config={},
                  *args,
                  **kwargs):
         super().__init__()
+        self.config = config
+        
         if v2:
             Conv = GATv2Conv
         else:
@@ -85,7 +88,7 @@ class GAT_Custom(torch.nn.Module):
             self.skip_proj.append(
                 self.get_skip_proj(hidden_node_channels_per_head[-1]*heads[-1], out_channels)
             )
-
+            
 
     def get_skip_proj(self, in_channels, out_channels):
         if in_channels == out_channels:

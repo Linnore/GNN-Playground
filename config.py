@@ -125,7 +125,7 @@ class config:
             "register_info":{
                 "description": "Benchmark model from GAT paper.",
                 "tags": {
-                    "GATConv":"v1", # Change to v2 if v2 is True
+                    "v2": False, # Change to v2 if v2 is True
                     }, 
             },
             "hidden_node_channels_per_head": 8,
@@ -137,24 +137,24 @@ class config:
             "v2": False,
         },
         
-        "GAT-SAGE-trans": {
-            "base_model": "GAT_Custom",
-            "overwrite": {
-                "framework": "transductive",
-                "sampling_strategy": "SAGE",
-                "batch_size": 999999,
-                "lr" : 5e-3,
-                "weight_decay": 5e-4,
-            },
-            "hidden_node_channels_per_head": 8,
-            "num_layers": 2,
-            "num_neighbors": [25, 10],
-            "heads": 8,
-            "output_haeds": 1,
-            "dropout": 0,
-            "jk": None,
-            "v2": False,
-        },
+        # "GAT-SAGE-trans": {
+        #     "base_model": "GAT_Custom",
+        #     "overwrite": {
+        #         "framework": "transductive",
+        #         "sampling_strategy": "SAGE",
+        #         "batch_size": 999999,
+        #         "lr" : 5e-3,
+        #         "weight_decay": 5e-4,
+        #     },
+        #     "hidden_node_channels_per_head": 8,
+        #     "num_layers": 2,
+        #     "num_neighbors": [25, 10],
+        #     "heads": 8,
+        #     "output_haeds": 1,
+        #     "dropout": 0,
+        #     "jk": None,
+        #     "v2": False,
+        # },
         
         # Inductive benchmark GAT of PPI; 
         "GAT-benchmark-in": {
@@ -170,7 +170,7 @@ class config:
             "register_info":{
                 "description": "Benchmark model from GAT paper.",
                 "tags": {
-                    "GATConv":"v1", # Change to v2 if v2 is True
+                    "v2": False, # Change to v2 if v2 is True
                     }, 
             },
             "num_layers": 3,
@@ -183,40 +183,40 @@ class config:
             "skip_connection": True,
         },
         
-        "GAT-PyG-in": {
-            "base_model": "GAT_PyG",
-            "overwrite": {
-                "framework": "inductive",
-                "sampling_strategy": "GraphBatching",
-                "batch_size": 2,
-                "lr" : 5e-3,
-                "weight_decay": 0,
-            },
-            "num_layers": 3,
-            "heads": 4,
-            "hidden_node_channels": 1024,
-            "dropout": 0,
-            "jk": None,
-            "v2": False,
-        },
+        # "GAT-PyG-in": {
+        #     "base_model": "GAT_PyG",
+        #     "overwrite": {
+        #         "framework": "inductive",
+        #         "sampling_strategy": "GraphBatching",
+        #         "batch_size": 2,
+        #         "lr" : 5e-3,
+        #         "weight_decay": 0,
+        #     },
+        #     "num_layers": 3,
+        #     "heads": 4,
+        #     "hidden_node_channels": 1024,
+        #     "dropout": 0,
+        #     "jk": None,
+        #     "v2": False,
+        # },
         
-        # Equivalent to GAT with equal attention + jk.
-        # TODO: Customizable GraphSAGE with skip-connection
-        "GAT-Equal-benchmark-in":{
-            "base_model": "GraphSAGE_PyG",
-            "overwrite": {
-                "framework": "inductive",
-                "sampling_strategy": "GraphBatching",
-                "batch_size": 2,
-                "lr" : 5e-3,
-                "weight_decay": 0,
-            },
-            "num_layers": 3,
-            "hidden_node_channels": 1024,
-            "dropout": 0,
-            "aggr": "mean",
-            "jk": "cat"
-        },
+        # # Equivalent to GAT with equal attention + jk.
+        # # TODO: Customizable GraphSAGE with skip-connection
+        # "GAT-Equal-benchmark-in":{
+        #     "base_model": "GraphSAGE_PyG",
+        #     "overwrite": {
+        #         "framework": "inductive",
+        #         "sampling_strategy": "GraphBatching",
+        #         "batch_size": 2,
+        #         "lr" : 5e-3,
+        #         "weight_decay": 0,
+        #     },
+        #     "num_layers": 3,
+        #     "hidden_node_channels": 1024,
+        #     "dropout": 0,
+        #     "aggr": "mean",
+        #     "jk": "cat"
+        # },
                 
         "GIN": {
 

@@ -1,9 +1,10 @@
 from loguru import logger
-from torch_geometric.nn.models import GraphSAGE as GraphSAGE_PyG
+from torch_geometric.nn.models import GraphSAGE as GraphSAGE_Base
 
 
 
-class GraphSAGEe(GraphSAGE_PyG):
-    def __init__(self, *args, **kwargs):
-        super.__init__(self, *args, **kwargs)
-        raise NotImplementedError
+class GraphSAGE_PyG(GraphSAGE_Base):
+    def __init__(self, config={}, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.config = config
+
