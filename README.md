@@ -17,10 +17,22 @@ bash launch_mlflow.sh
 Step 2. 
 ```bash
 
-python run_pyg.py train GraphSAGE-mean Reddit
+python run_pyg.py train GAT-benchmark-trans Cora
+
+python run_pyg.py evaluate Cora --model GAT-benchmark-trans-Cora
+
+python run_pyg.py inference Cora --model GAT-benchmark-trans-Cora --split test
 ```
+Check `--help` for the three modes: `train`, `evaluate`, and `inference`.
 
 Advanced experiment by modifying `config.py`
+Supported models can be found in `model_collections`.
+Supported datasets can be found in `dataset_collections`.
+
+#### Custom Models and Datasets
+TODO: docs and templates for customized models and datasets.
+
+Add the custom models and (local) datasets following the above given templates in `config.py`'s `model_collections` and `dataset_collections`. 
 
 ### MLflow
 
@@ -164,7 +176,8 @@ python run_pyg.py train GraphSAGE-mean Cora --auth --device cpu
    - GraphSAGE
    - GAT
    - GIN
-  Modify the settings of corresponding models in `config.py` to configure the models.
+  
+Modify the settings of corresponding models in `config.py` to configure the models.
  - (optional) mlflow_server: use the MLflow tracking server provided in the `config.py`.
  - (optional) auth: use the authentication credentials in the `config.py` to login the MLflow tracking server.
  - (optional) device: specify the device.
@@ -174,11 +187,10 @@ python run_pyg.py train GraphSAGE-mean Cora --auth --device cpu
 
 ## Development Log
 ### Playground Model
-- GCN ???
 - GraphSAGE
 - GAT
-- JK-Net
 - GIN
+- SP-GNN
 
 ### Framework setup:
 
@@ -189,16 +201,22 @@ python run_pyg.py train GraphSAGE-mean Cora --auth --device cpu
     - [ ] Customizable GraphSAGE
       - [x] Benchmark for Transductive Learning on Planetoid
       - [ ] Benchmark for Inductive Learning on SAINT paper datasets.
-      - [ ] Benchmark for Inductive Learning on PPI
+      - [x] Benchmark for Inductive Learning on PPI
   - [-] GAT
     - [x] PyG's official implementation
     - [-] Customizable GAT
       - [x] Benchmark for Transductive Learning on Planetoid
       - [ ] Benchmark for Inductive Learning on SAINT paper datasets.
-      - [ ] Benchmark for Inductive Learning on PPI
+      - [x] Benchmark for Inductive Learning on PPI
       - [ ] Edge update
     - [ ] 
   - [ ] GIN
+    - [ ] Benchmark on Planetoid. (SP-GNN paper)
+    - [ ] Framework codding to support graph-level tasks.
+  - [ ] SP-GNN
+    - [ ] Benchmark for the NC tasks.
+    - [ ] Implement for AML datasets.
+  
 - [ ] Deep Graph Library
 - [ ] Other explorations.
   - [ ] SALIENT with multi-GPU system.
