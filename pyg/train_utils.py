@@ -4,6 +4,7 @@ import copy
 from loguru import logger
 from .model.GraphSAGE import GraphSAGE_PyG
 from .model.GAT import GAT_PyG, GAT_Custom
+from .model.GIN import GIN_PyG, GIN_Custom
 
 def get_class_pos_weights(dataset_config, train_loader):
     total_num = 0
@@ -67,7 +68,7 @@ def get_model(config):
                 num_layers=model_config.pop("num_layers"),
                 heads=model_config.pop("heads", 8),
                 dropout=model_config.pop("dropout", 0),
-                v2=model_config.pop("v2", None),
+                v2=model_config.pop("v2", False),
                 jk=model_config.pop("jk", None),
                 config=archive_config,
                 **model_config,
@@ -82,14 +83,35 @@ def get_model(config):
                 heads=model_config.pop("heads", 8),
                 output_heads=model_config.pop("output_heads", 1),
                 dropout=model_config.pop("dropout", 0),
-                v2=model_config.pop("v2", None),
+                v2=model_config.pop("v2", False),
                 jk=model_config.pop("jk", None),
                 config=archive_config,
                 **model_config
             )
-
         case "GIN_PyG":
-            pass
+            model = GIN_PyG(
+                in_channels=dataset_config["num_node_features"],
+                out_channels=dataset_config["num_classes"],
+                hidden_channels=model_config.pop("hidden_channels"),
+                num_layers=model_config.pop("num_layers"),
+                dropout=model_config.pop("dropout", 0),
+                jk=model_config.pop("jk", None),
+                config=archive_config,
+                **model_config
+            )
+        case "GIN_Custom":
+            model = GIN_Custom(
+                in_channels=dataset_config["num_node_features"],
+                out_channels=dataset_config["num_classes"],
+                hidden_node_channels=model_config.pop("hidden_node_channels"),
+                num_layers=model_config.pop("num_layers"),
+                dropout=model_config.pop("dropout", 0),
+                GINE=model_config.pop("GINE", False),
+                jk=model_config.pop("jk", None),
+                config=archive_config,
+                **model_config
+            )    
+        
         case _:
             logger.exception(
                 f"Unreconized base model: {model_config['base_model']}")

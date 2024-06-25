@@ -137,25 +137,6 @@ class config:
             "v2": False,
         },
         
-        # "GAT-SAGE-trans": {
-        #     "base_model": "GAT_Custom",
-        #     "overwrite": {
-        #         "framework": "transductive",
-        #         "sampling_strategy": "SAGE",
-        #         "batch_size": 999999,
-        #         "lr" : 5e-3,
-        #         "weight_decay": 5e-4,
-        #     },
-        #     "hidden_node_channels_per_head": 8,
-        #     "num_layers": 2,
-        #     "num_neighbors": [25, 10],
-        #     "heads": 8,
-        #     "output_haeds": 1,
-        #     "dropout": 0,
-        #     "jk": None,
-        #     "v2": False,
-        # },
-        
         # Inductive benchmark GAT of PPI; 
         "GAT-benchmark-in": {
             "base_model": "GAT_Custom",
@@ -183,22 +164,6 @@ class config:
             "skip_connection": True,
         },
         
-        # "GAT-PyG-in": {
-        #     "base_model": "GAT_PyG",
-        #     "overwrite": {
-        #         "framework": "inductive",
-        #         "sampling_strategy": "GraphBatching",
-        #         "batch_size": 2,
-        #         "lr" : 5e-3,
-        #         "weight_decay": 0,
-        #     },
-        #     "num_layers": 3,
-        #     "heads": 4,
-        #     "hidden_node_channels": 1024,
-        #     "dropout": 0,
-        #     "jk": None,
-        #     "v2": False,
-        # },
         
         # # Equivalent to GAT with equal attention + jk.
         # # TODO: Customizable GraphSAGE with skip-connection
@@ -218,8 +183,49 @@ class config:
         #     "jk": "cat"
         # },
                 
-        "GIN": {
-
+        "GIN-benchmark-trans": {
+            "base_model": "GIN_Custom",
+            "overwrite": {
+                "framework": "transductive",
+                "sampling_strategy": "None",
+                "lr" : 5e-3,
+                "weight_decay": 5e-4,
+            },
+            # Registeration inforamtion for MLflow
+            "register_info":{
+                "description": "Benchmark GIN model.",
+                "tags": {
+                    "GINE": False, # True if use GINEConv
+                    }, 
+            },
+            "hidden_node_channels": 64,
+            "num_layers": 2,
+            "dropout": 0.0,
+            "jk": "cat",
+            "GINE": False,
+            "skip_connection": False,
+        },
+        
+        # Current GIN implementation has low acc for the node-level task.
+        "GIN-PyG-trans":{
+            "base_model": "GIN_PyG",
+            "overwrite": {
+                "framework": "transductive",
+                "sampling_strategy": "None",
+                "lr" : 1e-2,
+                "weight_decay": 5e-4,
+            },
+            # Registeration inforamtion for MLflow
+            "register_info":{
+                "description": "Benchmark GIN model.",
+                "tags": {
+                    "GINE": False, # True if use GINEConv
+                    }, 
+            },
+            "hidden_channels": 64,
+            "num_layers": 2,
+            "num_MLP_layers": 2,
+            "dropout": 0.6,
         }
     }
 
