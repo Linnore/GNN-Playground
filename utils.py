@@ -35,7 +35,7 @@ def add_train_parser(subparsers: argparse._SubParsersAction, parent_parser: argp
     general_config.add_argument('--device', default=None)
     general_config.add_argument('--tqdm', action="store_true", default=None)
     general_config.add_argument(
-        '--save_model', action="store_true", default=None)
+        '--register_model', action="store_true", default=None)
     general_config.add_argument(
         '--criterion', type=str, default=None, choices=["loss", "accuracy", "f1"])
     general_config.add_argument('--num_epochs', type=int, default=None)
@@ -121,7 +121,7 @@ def add_evaluate_parser(subparsers: argparse._SubParsersAction, parent_parser: a
 
 def create_parser(config: config):
     parser = argparse.ArgumentParser(
-        "Run GNN experiment implemented using Pytorch Geometric.")
+        "Run GNN experiments implemented using Pytorch Geometric.")
 
     # Parser for common arguments
     parent_parser = argparse.ArgumentParser(add_help=False)

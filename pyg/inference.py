@@ -106,7 +106,7 @@ def infer_gnn(config):
             col_names.append(f"pred_{i+1}")
     else:
         col_names.append("pred")
-    print(pred_df)
+        
     pred_df.columns = col_names
     pred_df.to_csv(pred_path, index=False)
     

@@ -5,6 +5,13 @@ Implement, test, and organize recent reseach of GNN-based methods. Enable lifecy
 Todo
 
 
+```
+python 3.10
+mlflow
+pytorch-geometric
+
+```
+
 ## Docs
 
 ### Quick Start:
