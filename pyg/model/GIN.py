@@ -110,6 +110,12 @@ class GIN_Custom(torch.nn.Module):
     def reset_parameters(self):
         for conv in self.conv:
             conv.reset_parameters()
+        if self.jk_mode:
+            for nn in self.jk_linear:
+                nn.reset_parameters()
+        if self.skip_connection:
+            for nn in self.skip_proj:
+                nn.register_parameter()
 
     def forward(self, x, edge_index):
         xs = []

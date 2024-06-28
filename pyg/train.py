@@ -101,7 +101,7 @@ def train_gnn(config):
     train_loader, val_loader, test_loader = get_loader(config)
 
     # Get model
-    model = get_model(config)
+    model = get_model(config, train_loader)
     model.to(device).reset_parameters()
 
     # Setup loss function

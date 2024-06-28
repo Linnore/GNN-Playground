@@ -128,7 +128,7 @@ class config:
                     "v2": False, # Change to v2 if v2 is True
                     }, 
             },
-            "hidden_node_channels_per_head": 8,
+            "hidden_node_channels_per_head": 32,
             "num_layers": 2,
             "heads": 8,
             "output_heads": 1,
@@ -183,6 +183,7 @@ class config:
         #     "jk": "cat"
         # },
                 
+        # Current GIN implementation has low acc for the node-level task.
         "GIN-benchmark-trans": {
             "base_model": "GIN_Custom",
             "overwrite": {
@@ -206,7 +207,6 @@ class config:
             "skip_connection": False,
         },
         
-        # Current GIN implementation has low acc for the node-level task.
         "GIN-PyG-trans":{
             "base_model": "GIN_PyG",
             "overwrite": {
@@ -222,10 +222,51 @@ class config:
                     "GINE": False, # True if use GINEConv
                     }, 
             },
-            "hidden_channels": 64,
+            "hidden_node_channels": 64,
             "num_layers": 2,
             "num_MLP_layers": 2,
             "dropout": 0.6,
+        },
+        
+        "PNA-PyG-trans":{
+            "base_model": "PNA_PyG",
+            "overwrite": {
+                "framework": "transductive",
+                "sampling_strategy": "None",
+                "lr" : 5e-4,
+                "weight_decay": 1e-3,
+            },
+            # Registeration inforamtion for MLflow
+            "register_info":{
+                "description": "Benchmark PNA model.",
+                "tags": {
+                    }, 
+            },
+            "hidden_node_channels": 64,
+            "num_layers": 2,
+            "dropout": 0.7,
+            "jk": "cat"
+        },
+        
+        "PNA-benchmark-trans":{
+            "base_model": "PNA_Custom",
+            "overwrite": {
+                "framework": "transductive",
+                "sampling_strategy": "SAGE",
+                "lr" : 5e-4,
+                "weight_decay": 1e-3,
+            },
+            # Registeration inforamtion for MLflow
+            "register_info":{
+                "description": "Benchmark PNA model.",
+                "tags": {
+                    }, 
+            },
+            "hidden_node_channels": 64,
+            "num_layers": 2,
+            "num_neighbors": [25, 10],
+            "dropout": 0.6,
+            # "jk": "cat"
         }
     }
 
