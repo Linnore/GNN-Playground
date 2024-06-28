@@ -319,6 +319,44 @@ class config:
             "task_type": "multi-label-NC",
             "num_node_features": 50,
             "num_classes": 121
-        }
+        },
+        "AMLworld-HI-Small":{
+            "task_type": "single-label-EC",
+            "num_node_features": 1,
+            "num_edge_features": 8,
+            "num_classes": 2
+        },
+        "AMLworld-HI-Medium":{
+            "task_type": "single-label-EC",
+            "num_node_features": 1,
+            "num_edge_features": 8,
+            "num_classes": 2
+        },
+        "AMLworld-HI-Large":{
+            "task_type": "single-label-EC",
+            "num_node_features": 1,
+            "num_edge_features": 8,
+            "num_classes": 2
+        },
+        "AMLworld-LI-Small":{
+            "task_type": "single-label-EC",
+            "num_node_features": 1,
+            "num_edge_features": 8,
+            "num_classes": 2
+        },
+        "AMLworld-LI-Medium":{
+            "task_type": "single-label-EC",
+            "num_node_features": 1,
+            "num_edge_features": 8,
+            "num_classes": 2
+        },
+        "AMLworld-LI-Large":{
+            "task_type": "single-label-EC",
+            "num_node_features": 1,
+            "num_edge_features": 8,
+            "num_classes": 2
+        },
+        
+        
 
     }

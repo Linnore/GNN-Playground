@@ -15,7 +15,7 @@ from torch_geometric.transforms import BaseTransform
 
 
 def to_adj_nodes_with_times(data):
-# Codes modified from https://github.com/IBM/Multi-GNN/blob/main/data_util.py
+    # Codes modified from https://github.com/IBM/Multi-GNN/blob/main/data_util.py
     num_nodes = data.num_nodes
     timestamps = torch.zeros(
         (data.edge_index.shape[1], 1)) if data.timestamps is None else data.timestamps.reshape((-1, 1))
@@ -30,9 +30,8 @@ def to_adj_nodes_with_times(data):
     return adj_list_in, adj_list_out
 
 
-
 def to_adj_edges_with_times(data):
-# Codes adopted from https://github.com/IBM/Multi-GNN/blob/main/data_util.py
+    # Codes adopted from https://github.com/IBM/Multi-GNN/blob/main/data_util.py
     num_nodes = data.num_nodes
     timestamps = torch.zeros(
         (data.edge_index.shape[1], 1)) if data.timestamps is None else data.timestamps.reshape((-1, 1))
@@ -47,9 +46,8 @@ def to_adj_edges_with_times(data):
     return adj_edges_in, adj_edges_out
 
 
-
 def ports(edge_index, adj_list):
-# Codes adopted from https://github.com/IBM/Multi-GNN/blob/main/data_util.py
+    # Codes adopted from https://github.com/IBM/Multi-GNN/blob/main/data_util.py
     ports = torch.zeros(edge_index.shape[1], 1)
     ports_dict = {}
     for v, nbs in adj_list.items():
@@ -65,8 +63,9 @@ def ports(edge_index, adj_list):
         ports[i] = ports_dict[tuple(e.numpy())]
     return ports
 
+
 def time_deltas(data, adj_edges_list):
-# Codes adopted from https://github.com/IBM/Multi-GNN/blob/main/data_util.py
+    # Codes adopted from https://github.com/IBM/Multi-GNN/blob/main/data_util.py
     time_deltas = torch.zeros(data.edge_index.shape[1], 1)
     if data.timestamps is None:
         return time_deltas
@@ -246,7 +245,7 @@ class AMLworld(InMemoryDataset):
 
         with open(formatted_trans_file, "w") as writer:
             writer.write(header)
-            for i in tqdm(range(raw.nrows), desc="Formatting files from Kaggle raw data:" ,disable=not self.verbose):
+            for i in tqdm(range(raw.nrows), desc="Formatting files from Kaggle raw data:", disable=not self.verbose):
                 datetime_object = datetime.strptime(
                     raw[i, "Timestamp"], '%Y/%m/%d %H:%M')
                 ts = datetime_object.timestamp()
@@ -399,8 +398,6 @@ class AMLworld(InMemoryDataset):
         # e_val = np.concatenate([tr_inds, val_inds])
         e_val = val_inds.numpy()
         e_te = te_inds.numpy()
-        
-        
 
         tr_edge_index = edge_index[:, e_tr]
         tr_edge_attr = edge_attr[e_tr]
@@ -456,19 +453,20 @@ class AMLworld(InMemoryDataset):
         te_data.add_time_deltas()
         if self.verbose:
             logger.info(f"Done: adding time-deltas")
-        
-        tmp_edge_attr = torch.zeros((edge_attr.shape[0], tr_data.edge_attr.shape[-1]))
+
+        tmp_edge_attr = torch.zeros(
+            (edge_attr.shape[0], tr_data.edge_attr.shape[-1]))
         tmp_edge_attr[e_tr] = tr_data.edge_attr
         tmp_edge_attr[e_val] = val_data.edge_attr
         tmp_edge_attr[e_te] = te_data.edge_attr
-        
+
         train_mask = torch.zeros(edge_index.shape[1], dtype=bool)
         train_mask[e_tr] = True
         val_mask = torch.zeros(edge_index.shape[1], dtype=bool)
         val_mask[e_val] = True
         test_mask = torch.zeros(edge_index.shape[1], dtype=bool)
         test_mask[e_te] = True
-        
+
         data = GraphData(
             x=x,
             edge_index=edge_index,
@@ -479,15 +477,15 @@ class AMLworld(InMemoryDataset):
             test_mask=test_mask,
             timestamps=timestamps,
         )
-        
+
         data_list = [data]
-        
+
         if self.pre_filter is not None:
             data_list = [data for data in data_list if self.pre_filter(data)]
 
         if self.pre_transform is not None:
             data_list = [self.pre_transform(data) for data in data_list]
-            
+
         self.save(data_list, self.processed_paths[0])
 
         # TODO: Process pattern tag into data object
