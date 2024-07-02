@@ -63,7 +63,7 @@ class GAT_Custom(torch.nn.Module):
 
         self.jk_mode = jk
         if not self.jk_mode in ["cat", None]:
-            logger.exception(NotImplementedError(
+            raise NotImplementedError(NotImplementedError(
                 "JK mode not implemented. Only support concat JK for now!"))
         if self.jk_mode != None:
             self.jk = JumpingKnowledge(jk)
@@ -101,10 +101,12 @@ class GAT_Custom(torch.nn.Module):
             conv.reset_parameters()
         if self.jk_mode:
             for nn in self.jk_linear:
-                nn.reset_parameters()
+                if isinstance(nn, Linear):
+                    nn.reset_parameters()
         if self.skip_connection:
             for nn in self.skip_proj:
-                nn.register_parameter()
+                if isinstance(nn, Linear):
+                    nn.reset_parameters()
 
     def forward(self, x, edge_index):
         xs = []

@@ -7,67 +7,16 @@ import copy
 import numpy as np
 
 from .data_utils import get_loader
-from .train_utils import get_loss_fn, get_model
+from .model.model_hub import get_model
+from .train_utils import get_loss_fn, get_run_step
 
 from loguru import logger
 from torch_geometric.nn import summary
-from tqdm import tqdm
-from sklearn.metrics import classification_report, f1_score
+from sklearn.metrics import classification_report
 
 from mlflow import MlflowClient
 from mlflow.models.signature import ModelSignature
 from mlflow.types.schema import Schema, TensorSpec
-
-
-def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0):
-    total_loss = 0
-    total_num = 0
-    predictions = []
-    truths = []
-    bar = tqdm(loader, total=len(loader), disable=not enable_tqdm)
-    for batch in bar:
-        if mode == "train":
-            optimizer.zero_grad()
-
-        if sampling_strategy == "SAGE":
-            mask = torch.arange(batch.batch_size)
-        elif sampling_strategy in [None, "None"]:
-            mask = eval(f"batch.{mode}_mask")
-        elif sampling_strategy == "GraphBatching":
-            mask = torch.ones(batch.x.shape[0], dtype=bool)
-
-        targets = batch.y[mask]  # on cpu
-        outputs = model(batch.x.to(device), batch.edge_index.to(device))[mask]
-        loss = loss_fn(outputs, targets)
-
-        if mode == "train":
-            loss.backward()
-            optimizer.step()
-
-        if multilabel:
-            preds = outputs > threshold
-        else:
-            preds = outputs.argmax(dim=-1)
-        predictions.append(preds)
-        truths.append(targets)
-
-        loss = loss.detach().cpu()
-        num_targets = outputs.numel()
-        total_loss += loss * num_targets
-        total_num += num_targets
-        bar.set_description(f"{mode}_loss={loss:<8.6g}")
-
-    # Metrics
-    predictions = torch.cat(predictions, dim=0).detach().cpu().numpy()
-    truths = torch.cat(truths, dim=0).detach().numpy()
-
-    avg_loss = total_loss/total_num
-    mlflow.log_metric(f"{mode} loss", avg_loss, epoch)
-
-    f1 = f1_score(truths, predictions, average="micro")
-    mlflow.log_metric(f"{mode} F1", f1, epoch)
-
-    return avg_loss, f1, predictions, truths
 
 
 def train_gnn(config):
@@ -103,8 +52,8 @@ def train_gnn(config):
     train_loader, val_loader, test_loader = get_loader(config)
 
     # Get model
-    model = get_model(config, train_loader)
-    model.to(device).reset_parameters()
+    model = get_model(config, train_loader).to(device)
+    model.reset_parameters()
 
     # Setup loss function
     loss_fn = get_loss_fn(config, train_loader, reduction='mean')
@@ -119,6 +68,9 @@ def train_gnn(config):
     sample_batch = next(iter(train_loader))
     sample_x = sample_batch.x.to(device)
     sample_edge_index = sample_batch.edge_index.to(device)
+
+    logger.debug(sample_batch)
+
     summary_str = summary(model, sample_x, sample_edge_index)
     logger.info("Model Summary:\n" + summary_str)
     with open("logs/tmp/model_summary.txt", "w") as out_file:
@@ -142,29 +94,14 @@ def train_gnn(config):
         patience = general_config["num_epochs"]
 
     # Setup training steps according to task type
-    sampling_strategy = config["general_config"]["sampling_strategy"]
-    if dataset_config["task_type"] == "single-label-NC":
-        run_step = lambda *args, **kwargs: node_classification_step(
-            *args,
-            model=model,
-            loss_fn=loss_fn,
-            optimizer=optimizer,
-            enable_tqdm=general_config["tqdm"],
-            sampling_strategy=sampling_strategy,
-            device=device,
-            **kwargs)
-    elif dataset_config["task_type"] == "multi-label-NC":
-        run_step = lambda *args, **kwargs: node_classification_step(
-            *args,
-            model=model,
-            loss_fn=loss_fn,
-            optimizer=optimizer,
-            enable_tqdm=general_config["tqdm"],
-            sampling_strategy=sampling_strategy,
-            device=device,
-            multilabel=True,
-            threshold=0,
-            **kwargs)
+    run_step = get_run_step(
+        model,
+        loss_fn,
+        optimizer,
+        sampling_strategy=config["general_config"]["sampling_strategy"],
+        enable_tqdm=general_config["tqdm"],
+        device=device,
+        task_type=dataset_config["task_type"])
 
     best_epoch = 0
     for epoch in range(1, 1+general_config["num_epochs"]):

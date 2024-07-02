@@ -21,27 +21,29 @@ def merge_from_data_list(data_list):
 
 
 def get_data_SAGE(config):
-    transform = T.Compose([T.NormalizeFeatures()])
+    dataset_transform = T.Compose([T.NormalizeFeatures()])
+    batch_transform = None
+    
     dataset = config["dataset"]
     if dataset in ['Cora', 'CiteSeer', 'PubMed']:
         from torch_geometric.datasets import Planetoid
         dataset = Planetoid('dataset', dataset,
-                            split='public', transform=transform)
+                            split='public', transform=dataset_transform)
     elif dataset == "Reddit":
         from torch_geometric.datasets import Reddit
-        dataset = Reddit('dataset/Reddit', transform=transform)
+        dataset = Reddit('dataset/Reddit', transform=dataset_transform)
     elif dataset == "Reddit2":
         from torch_geometric.datasets import Reddit2
-        dataset = Reddit2('dataset/Reddit2', transform=transform)
+        dataset = Reddit2('dataset/Reddit2', transform=dataset_transform)
     elif dataset == "Flickr":
         from torch_geometric.datasets import Flickr
-        dataset = Flickr('dataset/Flickr', transform=transform)
+        dataset = Flickr('dataset/Flickr', transform=dataset_transform)
     elif dataset == " Yelp":
         from torch_geometric.datasets import Yelp
-        dataset = Yelp('dataset/Yelp', transform=transform)
+        dataset = Yelp('dataset/Yelp', transform=dataset_transform)
     elif dataset == "AmazonProducts":
         from torch_geometric.datasets import AmazonProducts
-        dataset = AmazonProducts('dataset/AmazonProducts', transform=transform)
+        dataset = AmazonProducts('dataset/AmazonProducts', transform=dataset_transform)
     elif dataset == "PPI":
         from torch_geometric.datasets import PPI
         dataset = [
@@ -49,12 +51,14 @@ def get_data_SAGE(config):
             merge_from_data_list(PPI('dataset/PPI', split='val')),
             merge_from_data_list(PPI('dataset/PPI', split='test')),
         ]
-    elif dataset == "AMLworld-HI-Small":
+    elif dataset.startswith("AMLworld"):
         from pyg.custom_dataset.AMLworld import AMLworld, AddEgoIds
-        logger.warning("AddEgoIDs not implemented!!!")
-        dataset = AMLworld('dataset/AMLworld', opt="HI-Small")
+        option = dataset.partition("-")[-1]
+        dataset = AMLworld('dataset/AMLworld', opt=option)
+        batch_transform = AddEgoIds()
+        
     else:
-        logger.exception('Unsupported dataset.')
+        raise NotImplementedError('Unsupported dataset.')
 
     general_config = config["general_config"]
 
@@ -125,27 +129,28 @@ def get_data_SAGE(config):
             test_data.test_mask = torch.ones(test_data.num_edges, dtype=bool)
 
     else:
-        logger.exception("Unsupported task type!")
+        raise NotImplementedError("Unsupported task type!")
 
-    return train_data, val_data, test_data
+    return train_data, val_data, test_data, batch_transform
 
 
 def get_data_SAINT(config):
     dataset_config = config["dataset_config"]
-    logger.exception('Not Implemented.')
+    raise NotImplementedError('Not Implemented.')
 
 
 def get_data_graph_batch(config):
+    batch_transform = None
     if config["dataset"] == "PPI":
         from torch_geometric.datasets import PPI
         train_dataset = PPI('dataset/PPI', split='train')
         val_dataset = PPI('dataset/PPI', split='val')
         test_dataset = PPI('dataset/PPI', split='test')
 
-    return train_dataset, val_dataset, test_dataset
+    return train_dataset, val_dataset, test_dataset, batch_transform
 
 
-def get_loader_SAGE(train_data, val_data, test_data, config):
+def get_loader_SAGE(train_data, val_data, test_data, transform, config):
     model_config = config["model_config"]
     params = config["hyperparameters"]
 
@@ -170,6 +175,7 @@ def get_loader_SAGE(train_data, val_data, test_data, config):
             input_nodes=train_data.train_mask,
             num_workers=general_config["num_workers"],
             persistent_workers=general_config["persistent_workers"],
+            transform=transform,
         )
 
         if not general_config["sample_when_predict"]:
@@ -184,6 +190,7 @@ def get_loader_SAGE(train_data, val_data, test_data, config):
             input_nodes=val_data.val_mask,
             num_workers=general_config["num_workers"],
             persistent_workers=general_config["persistent_workers"],
+            transform=transform,
         )
 
         test_loader = NeighborLoader(
@@ -193,6 +200,7 @@ def get_loader_SAGE(train_data, val_data, test_data, config):
             input_nodes=test_data.test_mask,
             num_workers=general_config["num_workers"],
             persistent_workers=general_config["persistent_workers"],
+            transform=transform,
         )
 
     elif task_type in ["single-label-EC"]:
@@ -201,7 +209,8 @@ def get_loader_SAGE(train_data, val_data, test_data, config):
             num_neighbors=num_neighbors,
             batch_size=params["batch_size"],
             edge_label_index=train_data.edge_index[:, train_data.train_mask],
-            edge_label=train_data.y
+            edge_label=train_data.y,
+            transform=transform,
         )
 
         val_loader = LinkNeighborLoader(
@@ -209,7 +218,8 @@ def get_loader_SAGE(train_data, val_data, test_data, config):
             num_neighbors=num_neighbors,
             batch_size=params["batch_size"],
             edge_label_index=val_data.edge_index[:, val_data.val_mask],
-            edge_label=val_data.y
+            edge_label=val_data.y,
+            transform=transform,
         )
 
         test_loader = LinkNeighborLoader(
@@ -217,33 +227,51 @@ def get_loader_SAGE(train_data, val_data, test_data, config):
             num_neighbors=num_neighbors,
             batch_size=params["batch_size"],
             edge_label_index=test_data.edge_index[:, test_data.test_mask],
-            edge_label=test_data.y
+            edge_label=test_data.y,
+            transform=transform,
         )
 
     return train_loader, val_loader, test_loader
 
 
 def get_loader_SAINT(data: Data, config):
-    logger.exception("Not implemented.")
+    raise NotImplementedError("Not implemented.")
 
 
-def get_loader_no_sampling(train_data, val_data, test_data, config):
+def get_loader_no_sampling(train_data, val_data, test_data, transform, config):
     logger.warning(
         "Sampling strategy is set to be None. Full graph will be used without mini-batching! Batch_size is ignored! ")
 
     logger.info(
         f"\ntrain_data={train_data}\nval_data={val_data}\ntest_data={test_data}")
     
+    if transform:
+        train_data = transform(train_data)
+        val_data = transform(val_data)
+        test_data = transform(test_data)
+    
     train_loader = DataLoader([train_data])
     val_loader = DataLoader([val_data])
     test_loader = DataLoader([test_data])
+    
+    train_loader.data = train_data
+    val_loader.data = val_data
+    test_loader.data = test_data
 
     return train_loader, val_loader, test_loader
 
 
-def get_loader_graph_batch(train_dataset, val_dataset, test_dataset, config):
+def get_loader_graph_batch(train_dataset, val_dataset, test_dataset, transform, config):
     batch_size = config["hyperparameters"]["batch_size"]
     general_config = config["general_config"]
+    
+    if general_config["sampling_strategy"] == "GraphBatching" and config["dataset_config"]["task_type"].endswith("-EC"):
+        raise NotImplementedError("Graph Batching is not implemented for edge classification task!")
+
+    if transform:
+        train_dataset = transform(train_dataset)
+        val_dataset = transform(val_dataset)
+        test_dataset = transform(test_dataset)
 
     train_loader = DataLoader(
         train_dataset,
@@ -263,6 +291,8 @@ def get_loader_graph_batch(train_dataset, val_dataset, test_dataset, config):
         num_workers=general_config["num_workers"],
         persistent_workers=general_config["persistent_workers"],
     )
+    
+    # TODO: save data into loader
 
     return train_loader, val_loader, test_loader
 
@@ -288,6 +318,8 @@ def get_loader(config):
 
 def get_inference_data_SAGE(config):
     dataset = config["dataset"]
+    batch_transform = None
+    
     if dataset in [
         "Cora",
         "CiteSeer",
@@ -299,7 +331,7 @@ def get_inference_data_SAGE(config):
         "AmazonProducts",
         "PPI",
     ]:
-        train_data, val_data, test_data = get_data_SAGE(config)
+        train_data, val_data, test_data, batch_transform = get_data_SAGE(config)
     else:
         logger.info("TODO: support custom dataset.")
         unlabelled_data = None
@@ -310,17 +342,17 @@ def get_inference_data_SAGE(config):
     match split:
         case "train":
             train_data.infer_mask = train_data.train_mask
-            return train_data
+            return train_data, batch_transform
         case "val":
             val_data.infer_mask = val_data.val_mask
-            return val_data
+            return val_data, batch_transform
         case "test":
             test_data.infer_mask = test_data.test_mask
-            return test_data
+            return test_data, batch_transform
         case "unlabelled":
             unlabelled_data.infer_mask = torch.ones(
                 unlabelled_data.num_nodes, dtype=int)
-            return unlabelled_data
+            return unlabelled_data, batch_transform
 
 
 def get_inference_data_SAINT(config):
@@ -331,7 +363,7 @@ def get_inference_data_graph_batch(config):
     pass
 
 
-def get_inference_loader_SAGE(infer_data: Data, config: dict):
+def get_inference_loader_SAGE(infer_data: Data, transform, config: dict):
     model_config = config["model_config"]
     num_neighbors = model_config.get("num_neighbors", -1)
     if type(num_neighbors) == int:
@@ -359,25 +391,30 @@ def get_inference_loader_SAGE(infer_data: Data, config: dict):
         input_nodes=infer_data.infer_mask,
         num_workers=general_config["num_workers"],
         persistent_workers=general_config["persistent_workers"],
+        transform=transform,
     )
 
-    return infer_data, infer_loader
+    return infer_loader
 
 
 def get_inference_loader_SAINT(data: Data, config: dict):
     pass
 
 
-def get_inference_loader_no_sampling(infer_data: Data, config: dict):
+def get_inference_loader_no_sampling(infer_data: Data, transform, config: dict):
     logger.warning(
         "Sampling strategy is set to be None. Full graph will be used without mini-batching! Batch_size is ignored! ")
     
     logger.info(
         f"\ninference_data={infer_data}")
 
+    if transform:
+        infer_data = transform(infer_data)
+        
     infer_loader = DataLoader([infer_data])
+    infer_loader.data = infer_data
     
-    return infer_data, infer_loader
+    return infer_loader
 
 
 def get_inference_loader_graph_batch(data: Data, config: dict):
@@ -387,10 +424,10 @@ def get_inference_loader_graph_batch(data: Data, config: dict):
 def get_inference_loader(config):
     sampling_strategy = config["general_config"]["sampling_strategy"]
     if sampling_strategy == 'SAGE':
-        return get_inference_loader_SAGE(get_inference_data_SAGE(config), config)
+        return get_inference_loader_SAGE(*get_inference_data_SAGE(config), config)
     elif sampling_strategy == 'SAINT':
-        return get_inference_loader_SAINT(get_inference_data_SAINT(config), config)
+        return get_inference_loader_SAINT(*get_inference_data_SAINT(config), config)
     elif sampling_strategy == 'GraphBatching':
-        return get_inference_loader_graph_batch(get_inference_data_graph_batch(config), config)
+        return get_inference_loader_graph_batch(*get_inference_data_graph_batch(config), config)
     elif sampling_strategy == 'None' or sampling_strategy == None:
-        return get_inference_loader_no_sampling(get_inference_data_SAGE(config), config)
+        return get_inference_loader_no_sampling(*get_inference_data_SAGE(config), config)

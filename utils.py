@@ -47,6 +47,11 @@ def add_train_parser(subparsers: argparse._SubParsersAction, parent_parser: argp
     hyperparameters.add_argument('--batch_size', type=int, default=None)
     hyperparameters.add_argument('--lr', type=float, default=None)
     hyperparameters.add_argument('--weight_decay', type=float, default=None)
+    
+    # Loss function hyperparameters
+    hyperparameters.add_argument('--weighted_BCE', action="store_true", default=None)
+    hyperparameters.add_argument('--weighted_CE', action="store_true", default=None)
+    
 
     # Model hyperparameters
     model_params = parser.add_argument_group("Model Hyperparameters")
@@ -170,7 +175,7 @@ def setup_mlflow(config):
             os.environ["MLFLOW_TRACKING_PASSWORD"] = mlflow_config['password']
 
         else:
-            logger.exception(
+            raise NotImplementedError(
                 f"Failed to log in to the MLFlow server at {mlflow_config['tracking_uri']}!")
 
 

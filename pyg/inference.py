@@ -78,7 +78,8 @@ def infer_gnn(config):
     general_config = config["general_config"]
     dataset_config = config["dataset_config"]
 
-    data, loader = get_inference_loader(config)
+    loader = get_inference_loader(config)
+    data = loader.data
 
     n_ids, predictions = node_classification_inference(
         model,

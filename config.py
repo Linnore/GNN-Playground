@@ -49,7 +49,7 @@ class config:
         "batch_size": 512, 
         "lr": 5e-3,
         "weight_decay": 0.0005, # L2 regularization,
-        
+        "weighted_CE": False, # Only useful for single-label task.
         "weighted_BCE": False, # Only useful for multi-label task.
     }
 
@@ -320,39 +320,41 @@ class config:
             "num_node_features": 50,
             "num_classes": 121
         },
+        
+        # node_feature includes: a dummy 1, and EgoID
         "AMLworld-HI-Small":{
             "task_type": "single-label-EC",
-            "num_node_features": 1,
+            "num_node_features": 2,
             "num_edge_features": 8,
             "num_classes": 2
         },
         "AMLworld-HI-Medium":{
             "task_type": "single-label-EC",
-            "num_node_features": 1,
+            "num_node_features": 2,
             "num_edge_features": 8,
             "num_classes": 2
         },
         "AMLworld-HI-Large":{
             "task_type": "single-label-EC",
-            "num_node_features": 1,
+            "num_node_features": 2,
             "num_edge_features": 8,
             "num_classes": 2
         },
         "AMLworld-LI-Small":{
             "task_type": "single-label-EC",
-            "num_node_features": 1,
+            "num_node_features": 2,
             "num_edge_features": 8,
             "num_classes": 2
         },
         "AMLworld-LI-Medium":{
             "task_type": "single-label-EC",
-            "num_node_features": 1,
+            "num_node_features": 2,
             "num_edge_features": 8,
             "num_classes": 2
         },
         "AMLworld-LI-Large":{
             "task_type": "single-label-EC",
-            "num_node_features": 1,
+            "num_node_features": 2,
             "num_edge_features": 8,
             "num_classes": 2
         },

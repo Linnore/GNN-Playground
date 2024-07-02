@@ -1,149 +1,223 @@
+import mlflow
 import torch
-import copy
 
-from torch_geometric.nn.conv import PNAConv 
+import numpy as np
 
+from tqdm import tqdm
 from loguru import logger
-from .model.GraphSAGE import GraphSAGE_PyG
-from .model.GAT import GAT_PyG, GAT_Custom
-from .model.GIN import GIN_PyG, GIN_Custom
-from .model.PNA import PNA_PyG, PNA_Custom
+from sklearn.metrics import f1_score
+from sklearn.utils.class_weight import compute_class_weight
 
 
-def get_class_pos_weights(dataset_config, train_loader):
-    total_num = 0
-    pos_cnt = torch.zeros(dataset_config["num_classes"], dtype=int)
-    for batch in train_loader:
-        total_num += batch.y.shape[0]
-        pos_cnt = pos_cnt + batch.y.sum(axis=0)
+def get_pos_weight_for_BCEWithLogitsLoss(data):
+    # TODO: get weights for graph batching
+    total_num = data.num_nodes
+    pos_cnt = torch.unique(data.y, return_counts=True)[-1]
     neg_cnt = total_num - pos_cnt
     return neg_cnt/pos_cnt
-        
 
-def get_loss_fn(config, train_loader, reduction="sum"):
+
+def get_weight_for_CrossEntropyLoss(data):
+    # TODO: get weights for graph batching
+    y = data.y.numpy()
+    weight = compute_class_weight(
+        class_weight="balanced", classes=np.unique(y), y=y)
+    weight = torch.tensor(weight)
+
+
+def get_loss_fn(config, loader, reduction="mean"):
     dataset_config = config["dataset_config"]
-    if dataset_config["task_type"] == "single-label-NC":
-        return torch.nn.CrossEntropyLoss(reduction=reduction)
+    if config["general_config"]["sampling_strategy"] != "GraphBatching":
+        data = loader.data
+    else:
+        logger.warning("Weighted loss function is not implemented for graph batching!")
+        if config["hyperparameters"]["weighted_CE"] or config["hyperparameters"]["weighted_BCE"]:
+            raise NotImplementedError
     
+    if dataset_config["task_type"] == "single-label-NC":
+        if config["hyperparameters"]["weighted_CE"]:
+            weight = get_weight_for_CrossEntropyLoss(data)
+        else:
+            weight = None
+        return torch.nn.CrossEntropyLoss(weight=weight, reduction=reduction)
+
     elif dataset_config["task_type"] == "multi-label-NC":
         if config["hyperparameters"]["weighted_BCE"]:
-            pos_weight = get_class_pos_weights(dataset_config, train_loader)
+            pos_weight = get_pos_weight_for_BCEWithLogitsLoss(data)
         else:
-            pos_weight = torch.ones(dataset_config["num_classes"])
+            pos_weight = None
         return torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction=reduction)
+
+    elif dataset_config["task_type"] == "single-label-EC":
+        if config["hyperparameters"]["weighted_CE"]:
+            weight = get_weight_for_CrossEntropyLoss(data)
+        else:
+            weight = None
+        return torch.nn.CrossEntropyLoss(weight=weight, reduction=reduction)
+
+
+def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0):
+    total_loss = 0
+    total_num = 0
+    predictions = []
+    truths = []
+    bar = tqdm(loader, total=len(loader), disable=not enable_tqdm)
+    for batch in bar:
+        if mode == "train":
+            optimizer.zero_grad()
+
+        if sampling_strategy == "SAGE":
+            mask = torch.arange(batch.batch_size)
+        elif sampling_strategy in [None, "None"]:
+            mask = eval(f"batch.{mode}_mask")
+        elif sampling_strategy == "GraphBatching":
+            mask = None
+
+        targets = batch.y  # on cpu
+        outputs = model(batch.x.to(device), batch.edge_index.to(device))
+
+        if mask is not None:
+            targets = targets[mask]
+            outputs = outputs[mask]
+
+        loss = loss_fn(outputs, targets)
+
+        if mode == "train":
+            loss.backward()
+            optimizer.step()
+
+        if multilabel:
+            preds = outputs > threshold
+        else:
+            preds = outputs.argmax(dim=-1)
+        predictions.append(preds)
+        truths.append(targets)
+
+        loss = loss.detach().cpu()
+        num_targets = outputs.numel()
+        total_loss += loss * num_targets
+        total_num += num_targets
+        bar.set_description(f"{mode}_loss={loss:<8.6g}")
+
+    # Metrics
+    predictions = torch.cat(predictions, dim=0).detach().cpu().numpy()
+    truths = torch.cat(truths, dim=0).detach().numpy()
+
+    avg_loss = total_loss/total_num
+    mlflow.log_metric(f"{mode} loss", avg_loss, epoch)
+
+    f1 = f1_score(truths, predictions, average="micro")
+    mlflow.log_metric(f"{mode} F1", f1, epoch)
+
+    return avg_loss, f1, predictions, truths
+
+
+def edge_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0):
+
+    total_loss = 0
+    total_num = 0
+    predictions = []
+    truths = []
+    has_edge_attr = 'edge_attr' in loader.data.edge_attrs()
+    bar = tqdm(loader, total=len(loader), disable=not enable_tqdm)
+    for batch in bar:
+        if mode == "train":
+            optimizer.zero_grad()
+
+        if sampling_strategy == "SAGE":
+            mask = torch.isin(batch.e_id, batch.input_id)
+        elif sampling_strategy in [None, "None"]:
+            mask = eval(f"batch.{mode}_mask")
+
+        targets = batch.y  # on cpu
+        outputs = model(batch.x.to(device), batch.edge_index.to(
+            device), batch.edge_attr if has_edge_attr else None)
+
+        if mask is not None:
+            targets = targets[mask]
+            outputs = outputs[mask]
+
+        loss = loss_fn(outputs, targets)
+
+        if mode == "train":
+            loss.backward()
+            optimizer.step()
+
+        if multilabel:
+            preds = outputs > threshold
+        else:
+            preds = outputs.argmax(dim=-1)
+        predictions.append(preds)
+        truths.append(targets)
+
+        loss = loss.detach().cpu()
+        num_targets = outputs.numel()
+        total_loss += loss * num_targets
+        total_num += num_targets
+        bar.set_description(f"{mode}_loss={loss:<8.6g}")
+
+    # Metrics
+    predictions = torch.cat(predictions, dim=0).detach().cpu().numpy()
+    truths = torch.cat(truths, dim=0).detach().numpy()
+
+    avg_loss = total_loss/total_num
+    mlflow.log_metric(f"{mode} loss", avg_loss, epoch)
+
+    f1 = f1_score(truths, predictions, average="micro")
+    mlflow.log_metric(f"{mode} F1", f1, epoch)
+
+    return avg_loss, f1, predictions, truths
+
+
+def get_run_step(model, loss_fn, optimizer, sampling_strategy, enable_tqdm, device, task_type):
+
+    if task_type == "single-label-NC":
+        run_step = lambda *args, **kwargs: node_classification_step(
+            *args,
+            model=model,
+            loss_fn=loss_fn,
+            optimizer=optimizer,
+            enable_tqdm=enable_tqdm,
+            sampling_strategy=sampling_strategy,
+            device=device,
+            **kwargs)
+    elif task_type == "multi-label-NC":
+        run_step = lambda *args, **kwargs: node_classification_step(
+            *args,
+            model=model,
+            loss_fn=loss_fn,
+            optimizer=optimizer,
+            enable_tqdm=enable_tqdm,
+            sampling_strategy=sampling_strategy,
+            device=device,
+            multilabel=True,
+            threshold=0,
+            **kwargs)
+    elif task_type == "single-label-EC":
+        run_step = lambda *args, **kwargs: edge_classification_step(
+            *args,
+            model=model,
+            loss_fn=loss_fn,
+            optimizer=optimizer,
+            enable_tqdm=enable_tqdm,
+            sampling_strategy=sampling_strategy,
+            device=device,
+            **kwargs
+        )
+    elif task_type == "single-label-EC":
+        run_step = lambda *args, **kwargs: edge_classification_step(
+            *args,
+            model=model,
+            loss_fn=loss_fn,
+            optimizer=optimizer,
+            enable_tqdm=enable_tqdm,
+            sampling_strategy=sampling_strategy,
+            device=device,
+            multilabel=True,
+            threshold=0,
+            **kwargs
+        )
     else:
-        logger.exception(NotImplementedError("Unsupported task type!"))
-    
-def filter_config_for_archive(config):
-    archive_config = {
-        "general_config": copy.deepcopy(config["general_config"]),
-        "model_config": copy.deepcopy(config["model_config"]),
-        "dataset_config": copy.deepcopy(config["dataset_config"]),
-        "hyperparameters": copy.deepcopy(config["hyperparameters"]),
-    }
-    
-    return archive_config
+        raise NotImplementedError("Unsupported task type for training.")
 
-def get_model(config, train_loader):
-    archive_config = filter_config_for_archive(config)
-    
-    model_config = config["model_config"]
-    model_config.pop("num_neighbors", -1)
-    
-    dataset_config = config["dataset_config"]
-    
-    match model_config.pop("base_model"):
-        case "GraphSAGE_PyG":
-            model = GraphSAGE_PyG(
-                in_channels=dataset_config["num_node_features"],
-                out_channels=dataset_config["num_classes"],
-                hidden_channels=model_config.pop("hidden_node_channels"),
-                num_layers=model_config.pop("num_layers"),
-                dropout=model_config.pop("dropout", 0),
-                jk=model_config.pop("jk", None),
-                config=archive_config,
-                **model_config,
-            )
-        case "GAT_PyG":
-            model = GAT_PyG(
-                in_channels=dataset_config["num_node_features"],
-                out_channels=dataset_config["num_classes"],
-                hidden_channels=model_config.pop("hidden_node_channels"),
-                num_layers=model_config.pop("num_layers"),
-                heads=model_config.pop("heads", 8),
-                dropout=model_config.pop("dropout", 0),
-                v2=model_config.pop("v2", False),
-                jk=model_config.pop("jk", None),
-                config=archive_config,
-                **model_config,
-            )
-        case "GAT_Custom":
-            model = GAT_Custom(
-                in_channels=dataset_config["num_node_features"],
-                out_channels=dataset_config["num_classes"],
-                hidden_node_channels_per_head=model_config.pop(
-                    "hidden_node_channels_per_head"),
-                num_layers=model_config.pop("num_layers"),
-                heads=model_config.pop("heads", 8),
-                output_heads=model_config.pop("output_heads", 1),
-                dropout=model_config.pop("dropout", 0),
-                v2=model_config.pop("v2", False),
-                jk=model_config.pop("jk", None),
-                config=archive_config,
-                **model_config
-            )
-        case "GIN_PyG":
-            model = GIN_PyG(
-                in_channels=dataset_config["num_node_features"],
-                out_channels=dataset_config["num_classes"],
-                hidden_channels=model_config.pop("hidden_node_channels"),
-                num_layers=model_config.pop("num_layers"),
-                dropout=model_config.pop("dropout", 0),
-                jk=model_config.pop("jk", None),
-                config=archive_config,
-                **model_config
-            )
-        case "GIN_Custom":
-            model = GIN_Custom(
-                in_channels=dataset_config["num_node_features"],
-                out_channels=dataset_config["num_classes"],
-                hidden_node_channels=model_config.pop("hidden_node_channels"),
-                num_layers=model_config.pop("num_layers"),
-                dropout=model_config.pop("dropout", 0),
-                GINE=model_config.pop("GINE", False),
-                jk=model_config.pop("jk", None),
-                config=archive_config,
-                **model_config
-            )    
-        
-        case "PNA_PyG":
-            deg = PNAConv.get_degree_histogram(train_loader)
-            model = PNA_PyG(
-                in_channels=dataset_config["num_node_features"],
-                out_channels=dataset_config["num_classes"],
-                hidden_channels=model_config.pop("hidden_node_channels"),
-                num_layers=model_config.pop("num_layers"),
-                deg=deg,
-                dropout=model_config.pop("dropout", 0),
-                jk=model_config.pop("jk", None),
-                config=archive_config,
-                **model_config
-            )
-        case "PNA_Custom":
-            deg = PNAConv.get_degree_histogram(train_loader)
-            model = PNA_Custom(
-                in_channels=dataset_config["num_node_features"],
-                out_channels=dataset_config["num_classes"],
-                hidden_node_channels=model_config.pop("hidden_node_channels"),
-                num_layers=model_config.pop("num_layers"),
-                deg=deg,
-                dropout=model_config.pop("dropout", 0),
-                jk=model_config.pop("jk", None),
-                config=archive_config,
-                **model_config
-            )
-        case _:
-            logger.exception(
-                f"Unreconized base model: {model_config['base_model']}")
-
-    return model
+    return run_step
