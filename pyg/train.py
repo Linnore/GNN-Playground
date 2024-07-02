@@ -29,9 +29,11 @@ def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer
         if mode == "train":
             optimizer.zero_grad()
 
-        if sampling_strategy in ["SAGE", None, "None"]:
+        if sampling_strategy == "SAGE":
             mask = torch.arange(batch.batch_size)
-        elif sampling_strategy in ["GraphBatching"]:
+        elif sampling_strategy in [None, "None"]:
+            mask = eval(f"batch.{mode}_mask")
+        elif sampling_strategy == "GraphBatching":
             mask = torch.ones(batch.x.shape[0], dtype=bool)
 
         targets = batch.y[mask]  # on cpu

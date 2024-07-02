@@ -13,18 +13,22 @@ from loguru import logger
 from tqdm import tqdm
 
 
-def inference(model, loader, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0):
+def node_classification_inference(model, loader, split, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0):
     n_ids = []
     predictions = []
     bar = tqdm(loader, total=len(loader), disable=not enable_tqdm)
 
     for batch in bar:
-        if sampling_strategy in ["SAGE", None, "None"]:
+        if sampling_strategy == "SAGE":
             mask = torch.arange(batch.batch_size)
             batch_n_ids = batch.n_id[mask]
-        elif sampling_strategy in ["GraphBatching"]:
+        elif sampling_strategy in [None, "None"]:
+            mask = eval(f"batch.{split}_mask")
+            batch_n_ids = torch.arange(batch.num_nodes)[mask]
+        elif sampling_strategy == "GraphBatching":
             mask = torch.ones(batch.x.shape[0], dtype=bool)
             raise NotImplementedError
+            
         
         outputs = model(batch.x.to(device), batch.edge_index.to(device))[mask]
         
@@ -76,15 +80,16 @@ def infer_gnn(config):
 
     data, loader = get_inference_loader(config)
 
-    n_ids, predictions = inference(
+    n_ids, predictions = node_classification_inference(
         model,
         loader,
+        split=vargs['split'],
         enable_tqdm=vargs["tqdm"],
         sampling_strategy=general_config["sampling_strategy"],
         device=general_config["device"],
         multilabel= True if dataset_config["task_type"].startswith("multi") else False
         )
-    
+
     
     # Save predictions
     pred_path = os.path.join(
