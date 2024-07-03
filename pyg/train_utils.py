@@ -9,20 +9,36 @@ from sklearn.metrics import f1_score
 from sklearn.utils.class_weight import compute_class_weight
 
 
+def get_sample_input(loader, task_type, device):
+    sample_input = {}
+    sample_batch = next(iter(loader))
+    sample_input["x"] = sample_batch.x.to(device)
+    sample_input["edge_index"] = sample_batch.edge_index.to(device)
+    if task_type.endswith("EC"):
+        sample_input["edge_attr"] = sample_batch.edge_attr
+    return sample_input
+
+
 def get_pos_weight_for_BCEWithLogitsLoss(data):
     # TODO: get weights for graph batching
     total_num = data.num_nodes
     pos_cnt = torch.unique(data.y, return_counts=True)[-1]
     neg_cnt = total_num - pos_cnt
-    return neg_cnt/pos_cnt
+    pos_weight = neg_cnt/pos_cnt
+    logger.info(f"Loss weight: pos_weight={pos_weight}")
+    return pos_weight
 
 
-def get_weight_for_CrossEntropyLoss(data):
-    # TODO: get weights for graph batching
-    y = data.y.numpy()
-    weight = compute_class_weight(
-        class_weight="balanced", classes=np.unique(y), y=y)
-    weight = torch.tensor(weight)
+def get_weight_for_CrossEntropyLoss(data, config):
+    weight = config["hyperparameters"].get("CE_weight", None)
+    if weight == None:
+        # TODO: get weights for graph batching
+        y = data.y.numpy()
+        weight = compute_class_weight(
+            class_weight="balanced", classes=np.unique(y), y=y)
+    weight = torch.tensor(weight, dtype=torch.float32)
+    logger.info(f"Loss weight: weight={weight}")
+    return weight
 
 
 def get_loss_fn(config, loader, reduction="mean"):
@@ -30,13 +46,14 @@ def get_loss_fn(config, loader, reduction="mean"):
     if config["general_config"]["sampling_strategy"] != "GraphBatching":
         data = loader.data
     else:
-        logger.warning("Weighted loss function is not implemented for graph batching!")
+        logger.warning(
+            "Weighted loss function is not implemented for graph batching!")
         if config["hyperparameters"]["weighted_CE"] or config["hyperparameters"]["weighted_BCE"]:
             raise NotImplementedError
-    
+
     if dataset_config["task_type"] == "single-label-NC":
         if config["hyperparameters"]["weighted_CE"]:
-            weight = get_weight_for_CrossEntropyLoss(data)
+            weight = get_weight_for_CrossEntropyLoss(data, config)
         else:
             weight = None
         return torch.nn.CrossEntropyLoss(weight=weight, reduction=reduction)
@@ -50,7 +67,7 @@ def get_loss_fn(config, loader, reduction="mean"):
 
     elif dataset_config["task_type"] == "single-label-EC":
         if config["hyperparameters"]["weighted_CE"]:
-            weight = get_weight_for_CrossEntropyLoss(data)
+            weight = get_weight_for_CrossEntropyLoss(data, config)
         else:
             weight = None
         return torch.nn.CrossEntropyLoss(weight=weight, reduction=reduction)
@@ -163,7 +180,8 @@ def edge_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer
     avg_loss = total_loss/total_num
     mlflow.log_metric(f"{mode} loss", avg_loss, epoch)
 
-    f1 = f1_score(truths, predictions, average="micro")
+    # Note that 1 is the minority class
+    f1 = f1_score(truths, predictions)
     mlflow.log_metric(f"{mode} F1", f1, epoch)
 
     return avg_loss, f1, predictions, truths

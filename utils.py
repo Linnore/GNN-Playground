@@ -55,7 +55,7 @@ def add_train_parser(subparsers: argparse._SubParsersAction, parent_parser: argp
 
     # Model hyperparameters
     model_params = parser.add_argument_group("Model Hyperparameters")
-    model_params.add_argument('--hidden_node_channels_per_head', type=int,
+    model_params.add_argument('--hidden_channels_per_head', type=int,
                               help='Number of hidden node channels per head.', default=None)
     model_params.add_argument('--num_layers', type=int, default=None)
     model_params.add_argument('--heads', type=int, default=None)
@@ -65,6 +65,7 @@ def add_train_parser(subparsers: argparse._SubParsersAction, parent_parser: argp
     model_params.add_argument('--dropout', type=float, default=None)
     model_params.add_argument('--jk', type=str, default=None)
     model_params.add_argument('--v2', action="store_true", default=None)
+    model_params.add_argument('--edge_update', action="store_true", default=None)
 
 
 def add_inference_parser(subparsers: argparse._SubParsersAction, parent_parser: argparse.ArgumentParser, config: config):

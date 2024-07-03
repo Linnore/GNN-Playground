@@ -50,6 +50,7 @@ class config:
         "lr": 5e-3,
         "weight_decay": 0.0005, # L2 regularization,
         "weighted_CE": False, # Only useful for single-label task.
+        "CE_weight": [1, 6],
         "weighted_BCE": False, # Only useful for multi-label task.
     }
 
@@ -106,7 +107,7 @@ class config:
             },
             "num_layers": 2,
             "num_neighbors": [25, 10],
-            "hidden_node_channels": 64,
+            "hidden_channels": 64,
             "dropout": 0,
             "aggr": "mean",
         },
@@ -128,7 +129,7 @@ class config:
                     "v2": False, # Change to v2 if v2 is True
                     }, 
             },
-            "hidden_node_channels_per_head": 32,
+            "hidden_channels_per_head": 32,
             "num_layers": 2,
             "heads": 8,
             "output_heads": 1,
@@ -156,7 +157,7 @@ class config:
             },
             "num_layers": 3,
             "heads": [4, 4],
-            "hidden_node_channels_per_head": [256, 256],
+            "hidden_channels_per_head": [256, 256],
             "output_heas": 6,
             "dropout": 0,
             "jk": None,
@@ -177,7 +178,7 @@ class config:
         #         "weight_decay": 0,
         #     },
         #     "num_layers": 3,
-        #     "hidden_node_channels": 1024,
+        #     "hidden_channels": 1024,
         #     "dropout": 0,
         #     "aggr": "mean",
         #     "jk": "cat"
@@ -199,7 +200,7 @@ class config:
                     "GINE": False, # True if use GINEConv
                     }, 
             },
-            "hidden_node_channels": 64,
+            "hidden_channels": 64,
             "num_layers": 2,
             "dropout": 0.0,
             "jk": "cat",
@@ -222,10 +223,10 @@ class config:
                     "GINE": False, # True if use GINEConv
                     }, 
             },
-            "hidden_node_channels": 64,
+            "hidden_channels": 8,
             "num_layers": 2,
             "num_MLP_layers": 2,
-            "dropout": 0.6,
+            "dropout": 0,
         },
         
         "PNA-PyG-trans":{
@@ -242,7 +243,7 @@ class config:
                 "tags": {
                     }, 
             },
-            "hidden_node_channels": 64,
+            "hidden_channels": 64,
             "num_layers": 2,
             "dropout": 0.7,
             "jk": "cat"
@@ -262,11 +263,35 @@ class config:
                 "tags": {
                     }, 
             },
-            "hidden_node_channels": 64,
+            "hidden_channels": 64,
             "num_layers": 2,
             "num_neighbors": [25, 10],
             "dropout": 0.6,
             # "jk": "cat"
+        },
+        
+        "GINe-in":{
+            "base_model": "GINe",
+            "overwrite":{
+                "framework": "inductive",
+                "sampling_strategy": "SAGE",
+                "lr": 5e-3,
+                "weight_decay": 0,
+                "batch_size": 1024,
+                "weighted_CE": True,
+                "CE_weight": [1, 6],
+                "num_epochs": 200,
+                "patience": 40,
+                "batch_size": 1024,
+            },
+            "register_info":{
+                "description": "GINe in IBM MultiGNN's paper."
+            },
+            "hidden_channels": 64,
+            "num_layers": 2,
+            "num_neighbors": [-1, -1],
+            "edge_update": True,
+            "dropout": 0.1,
         }
     }
 

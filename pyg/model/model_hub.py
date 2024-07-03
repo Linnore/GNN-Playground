@@ -5,7 +5,7 @@ from torch_geometric.nn.conv import PNAConv
 from loguru import logger
 from .GraphSAGE import GraphSAGE_PyG
 from .GAT import GAT_PyG, GAT_Custom
-from .GIN import GIN_PyG, GIN_Custom
+from .GIN import GIN_PyG, GIN_Custom, GINe
 from .PNA import PNA_PyG, PNA_Custom
 
 
@@ -33,10 +33,8 @@ def get_model(config, train_loader):
             model = GraphSAGE_PyG(
                 in_channels=dataset_config["num_node_features"],
                 out_channels=dataset_config["num_classes"],
-                hidden_channels=model_config.pop("hidden_node_channels"),
+                hidden_channels=model_config.pop("hidden_channels"),
                 num_layers=model_config.pop("num_layers"),
-                dropout=model_config.pop("dropout", 0),
-                jk=model_config.pop("jk", None),
                 config=archive_config,
                 **model_config,
             )
@@ -44,12 +42,10 @@ def get_model(config, train_loader):
             model = GAT_PyG(
                 in_channels=dataset_config["num_node_features"],
                 out_channels=dataset_config["num_classes"],
-                hidden_channels=model_config.pop("hidden_node_channels"),
+                hidden_channels=model_config.pop("hidden_channels"),
                 num_layers=model_config.pop("num_layers"),
                 heads=model_config.pop("heads", 8),
-                dropout=model_config.pop("dropout", 0),
                 v2=model_config.pop("v2", False),
-                jk=model_config.pop("jk", None),
                 config=archive_config,
                 **model_config,
             )
@@ -57,14 +53,12 @@ def get_model(config, train_loader):
             model = GAT_Custom(
                 in_channels=dataset_config["num_node_features"],
                 out_channels=dataset_config["num_classes"],
-                hidden_node_channels_per_head=model_config.pop(
-                    "hidden_node_channels_per_head"),
+                hidden_channels_per_head=model_config.pop(
+                    "hidden_channels_per_head"),
                 num_layers=model_config.pop("num_layers"),
                 heads=model_config.pop("heads", 8),
                 output_heads=model_config.pop("output_heads", 1),
-                dropout=model_config.pop("dropout", 0),
                 v2=model_config.pop("v2", False),
-                jk=model_config.pop("jk", None),
                 config=archive_config,
                 **model_config
             )
@@ -72,10 +66,8 @@ def get_model(config, train_loader):
             model = GIN_PyG(
                 in_channels=dataset_config["num_node_features"],
                 out_channels=dataset_config["num_classes"],
-                hidden_channels=model_config.pop("hidden_node_channels"),
+                hidden_channels=model_config.pop("hidden_channels"),
                 num_layers=model_config.pop("num_layers"),
-                dropout=model_config.pop("dropout", 0),
-                jk=model_config.pop("jk", None),
                 config=archive_config,
                 **model_config
             )
@@ -83,11 +75,9 @@ def get_model(config, train_loader):
             model = GIN_Custom(
                 in_channels=dataset_config["num_node_features"],
                 out_channels=dataset_config["num_classes"],
-                hidden_node_channels=model_config.pop("hidden_node_channels"),
+                hidden_channels=model_config.pop("hidden_channels"),
                 num_layers=model_config.pop("num_layers"),
-                dropout=model_config.pop("dropout", 0),
                 GINE=model_config.pop("GINE", False),
-                jk=model_config.pop("jk", None),
                 config=archive_config,
                 **model_config
             )
@@ -97,11 +87,9 @@ def get_model(config, train_loader):
             model = PNA_PyG(
                 in_channels=dataset_config["num_node_features"],
                 out_channels=dataset_config["num_classes"],
-                hidden_channels=model_config.pop("hidden_node_channels"),
+                hidden_channels=model_config.pop("hidden_channels"),
                 num_layers=model_config.pop("num_layers"),
                 deg=deg,
-                dropout=model_config.pop("dropout", 0),
-                jk=model_config.pop("jk", None),
                 config=archive_config,
                 **model_config
             )
@@ -110,11 +98,21 @@ def get_model(config, train_loader):
             model = PNA_Custom(
                 in_channels=dataset_config["num_node_features"],
                 out_channels=dataset_config["num_classes"],
-                hidden_node_channels=model_config.pop("hidden_node_channels"),
+                hidden_channels=model_config.pop("hidden_channels"),
                 num_layers=model_config.pop("num_layers"),
                 deg=deg,
-                dropout=model_config.pop("dropout", 0),
-                jk=model_config.pop("jk", None),
+                config=archive_config,
+                **model_config
+            )
+        case "GINe":
+            model = GINe(
+                in_channels=dataset_config["num_node_features"],
+                out_channels=dataset_config["num_classes"],
+                hidden_channels=model_config.pop("hidden_channels"),
+                edge_dim=dataset_config["num_edge_features"],
+                num_layers=model_config.pop("num_layers"),
+                edge_uupdate=model_config.pop("edge_update", False),
+                batch_norm=model_config.pop("batch_norm", True),
                 config=archive_config,
                 **model_config
             )

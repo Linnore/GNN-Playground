@@ -28,7 +28,7 @@ class PNA_PyG(PNA_Base):
 class PNA_Custom(torch.nn.Module):
     def __init__(self,
                  in_channels,
-                 hidden_node_channels: int | list[int],
+                 hidden_channels: int | list[int],
                  num_layers: int, out_channels: int,
                  deg,
                  aggregators=['mean', 'min', 'max', 'std'],
@@ -44,30 +44,33 @@ class PNA_Custom(torch.nn.Module):
 
         Conv = PNAConv
 
-        self.dropout = dropout
+        self.in_channels = in_channels
+        self.hidden_channels = hidden_channels
+        self.out_channels = out_channels
         self.num_layers = num_layers
+        self.dropout = dropout
 
-        if type(hidden_node_channels) == int:
-            hidden_node_channels = [hidden_node_channels] * (num_layers-1)
+        if type(hidden_channels) == int:
+            hidden_channels = [hidden_channels] * (num_layers-1)
 
         self.conv = ModuleList()
         self.conv.append(
             Conv(in_channels,
-                 hidden_node_channels[0],
+                 hidden_channels[0],
                  aggregators,
                  scalers,
                  deg=deg
                  ))
         for i in range(1, num_layers-1):
             self.conv.append(
-                Conv(hidden_node_channels[i-1],
-                     hidden_node_channels[i],
+                Conv(hidden_channels[i-1],
+                     hidden_channels[i],
                      aggregators,
                      scalers,
                      deg=deg
                      ))
         self.conv.append(
-            Conv(hidden_node_channels[-1],
+            Conv(hidden_channels[-1],
                  out_channels,
                  aggregators,
                  scalers,
@@ -81,25 +84,25 @@ class PNA_Custom(torch.nn.Module):
         if self.jk_mode != None:
             self.jk = JumpingKnowledge(jk)
             jk_in_channels = out_channels
-            for i in range(len(hidden_node_channels)):
-                jk_in_channels += hidden_node_channels[i]
+            for i in range(len(hidden_channels)):
+                jk_in_channels += hidden_channels[i]
             self.jk_linear = Linear(jk_in_channels, out_channels)
 
         self.skip_connection = skip_connection
         if self.skip_connection:
             self.skip_proj = ModuleList()
             self.skip_proj.append(
-                self.get_skip_proj(in_channels, hidden_node_channels[0])
+                self.get_skip_proj(in_channels, hidden_channels[0])
             )
             for i in range(1, num_layers-1):
                 self.skip_proj.append(
                     self.get_skip_proj(
-                        hidden_node_channels[i-1],
-                        hidden_node_channels[i]
+                        hidden_channels[i-1],
+                        hidden_channels[i]
                     )
                 )
             self.skip_proj.append(
-                self.get_skip_proj(hidden_node_channels[-1], out_channels)
+                self.get_skip_proj(hidden_channels[-1], out_channels)
             )
 
     def get_skip_proj(self, in_channels, out_channels):
@@ -112,9 +115,7 @@ class PNA_Custom(torch.nn.Module):
         for conv in self.conv:
             conv.reset_parameters()
         if self.jk_mode:
-            for nn in self.jk_linear:
-                if isinstance(nn, Linear):
-                    nn.reset_parameters()
+            self.jk_linear.reset_parameters()
         if self.skip_connection:
             for nn in self.skip_proj:
                 if isinstance(nn, Linear):

@@ -153,9 +153,14 @@ class AddEgoIds(BaseTransform):
         return data
 
 
+def z_norm(data):
+    std = data.std(0)
+    std = torch.where(std == 0, torch.tensor(1, dtype=torch.float32).cpu(), std)
+    return (data - data.mean(0)) / std
+
 class AMLworld(InMemoryDataset):
 
-    def __init__(self, root, opt="HI-Small", transform=None, pre_transform=None, pre_fileter=None, force_download=False, verbose=True):
+    def __init__(self, root, opt="HI-Small", transform=None, pre_transform=None, pre_fileter=None, force_download=False, verbose=True, *args, **kwargs):
         """
         Args:
             opt (str, optional): _description_. Defaults to "HI-Small".
@@ -163,6 +168,7 @@ class AMLworld(InMemoryDataset):
 
         self.force_download = force_download
         self.verbose = verbose
+        self.processed_in_this_call = False
 
         all_options = ["HI-Small", "HI-Medium", "HI-Large",
                        "LI-Small", "LI-Medium", "LI-Large"]
@@ -173,9 +179,13 @@ class AMLworld(InMemoryDataset):
 
         self.opt = opt
 
-        super().__init__(root, transform, pre_transform, pre_fileter)
+        super().__init__(root, transform, pre_transform, pre_fileter, *args, **kwargs)
 
         self.load(self.processed_paths[0])
+        
+        if not self.processed_in_this_call and self.verbose:
+            from loguru import logger
+            logger.info(self._data.information)
 
     @property
     def raw_file_names(self):
@@ -216,6 +226,9 @@ class AMLworld(InMemoryDataset):
                 "Downloading this dataset requires a configured Kaggle API for Python. Please refer to https://github.com/Kaggle/kaggle-api for proper configuration!")
 
     def process(self):
+        self.processed_in_this_call = True
+        infor_str_list = []
+        
         if self.verbose:
             from loguru import logger
 
@@ -306,6 +319,12 @@ class AMLworld(InMemoryDataset):
         # Edge: transaction lable
         y = torch.LongTensor(df_edges['Is Laundering'].to_numpy())
 
+        infor_str_list.append(
+            f"Illicit ratio = {sum(y)} / {len(y)} = {sum(y) / len(y) * 100:.2f}%")
+        infor_str_list.append(
+            f"Number of nodes (holdings doing transcations) = {df_nodes.shape[0]}")
+        infor_str_list.append(
+            f"Number of transactions = {df_edges.shape[0]}")
         if self.verbose:
             logger.info(
                 f"Illicit ratio = {sum(y)} / {len(y)} = {sum(y) / len(y) * 100:.2f}%")
@@ -318,11 +337,6 @@ class AMLworld(InMemoryDataset):
                          'Received Currency', 'Payment Format']
         node_features = ['Feature']
 
-        if self.verbose:
-            logger.info(f'Edge features being used: {edge_features}')
-            logger.info(
-                f'Node features being used: {node_features} ("Feature" is a placeholder feature of all 1s)')
-
         x = torch.tensor(df_nodes.loc[:, node_features].to_numpy()).float()
         edge_index = torch.LongTensor(
             df_edges.loc[:, ['from_id', 'to_id']].to_numpy().T)
@@ -331,6 +345,8 @@ class AMLworld(InMemoryDataset):
 
         n_days = int(timestamps.max() / (3600 * 24) + 1)
         n_samples = y.shape[0]
+        infor_str_list.append(
+            f'number of days and transactions in the data: {n_days} days, {n_samples} transactions')
         if self.verbose:
             logger.info(
                 f'number of days and transactions in the data: {n_days} days, {n_samples} transactions')
@@ -384,6 +400,12 @@ class AMLworld(InMemoryDataset):
         val_inds = torch.cat(split_inds[1])
         te_inds = torch.cat(split_inds[2])
 
+        infor_str_list.append(f"Total train samples: {tr_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
+                                   f"{y[tr_inds].float().mean() * 100 :.2f}% || Train days: {split[0][:5]}")
+        infor_str_list.append(f"Total val samples: {val_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
+                                   f"{y[val_inds].float().mean() * 100:.2f}% || Val days: {split[1][:5]}")
+        infor_str_list.append(f"Total test samples: {te_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
+                                   f"{y[te_inds].float().mean() * 100:.2f}% || Test days: {split[2][:5]}")
         if self.verbose:
             logger.info(f"Total train samples: {tr_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
                         f"{y[tr_inds].float().mean() * 100 :.2f}% || Train days: {split[0][:5]}")
@@ -443,6 +465,7 @@ class AMLworld(InMemoryDataset):
         tr_data.add_ports()
         val_data.add_ports()
         te_data.add_ports()
+        edge_features.extend(["In-Port", "Out-Port"])
         if self.verbose:
             logger.info(f"Done: adding ports")
 
@@ -451,8 +474,22 @@ class AMLworld(InMemoryDataset):
         tr_data.add_time_deltas()
         val_data.add_time_deltas()
         te_data.add_time_deltas()
+        edge_features.extend(["In-TimeDelta", "Out-TimeDelta"])
         if self.verbose:
             logger.info(f"Done: adding time-deltas")
+
+        edge_features_colID = {}
+        for id, feature in enumerate(edge_features):
+            edge_features_colID[feature] = id
+
+        infor_str_list.append(
+            f'Edge features being used: {edge_features}')
+        infor_str_list.append(
+            f'Node features being used: {node_features} ("Feature" is a placeholder feature of all 1s)')
+        if self.verbose:
+            logger.info(f'Edge features being used: {edge_features}')
+            logger.info(
+                f'Node features being used: {node_features} ("Feature" is a placeholder feature of all 1s)')
 
         tmp_edge_attr = torch.zeros(
             (edge_attr.shape[0], tr_data.edge_attr.shape[-1]))
@@ -477,6 +514,17 @@ class AMLworld(InMemoryDataset):
             test_mask=test_mask,
             timestamps=timestamps,
         )
+        
+        # Normalize the edge attribute
+        norm_col = []
+        for feature, id in edge_features_colID.items():
+            if feature != "Payment Format":
+                norm_col.append(id)
+        data.edge_attr[:, norm_col] = z_norm(data.edge_attr[:, norm_col])
+        
+
+        data.edge_features_colID = edge_features_colID
+        data.information = "\n".join(infor_str_list)
 
         data_list = [data]
 
@@ -490,6 +538,11 @@ class AMLworld(InMemoryDataset):
 
         # TODO: Process pattern tag into data object
         raw_pattern_file = os.path.join(self.raw_dir, self.opt+"_Patterns.txt")
+        
+    
+    
+
+
 
 
 def main():

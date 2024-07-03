@@ -8,7 +8,7 @@ import numpy as np
 
 from .data_utils import get_loader
 from .model.model_hub import get_model
-from .train_utils import get_loss_fn, get_run_step
+from .train_utils import get_loss_fn, get_run_step, get_sample_input
 
 from loguru import logger
 from torch_geometric.nn import summary
@@ -57,6 +57,7 @@ def train_gnn(config):
 
     # Setup loss function
     loss_fn = get_loss_fn(config, train_loader, reduction='mean')
+    logger.info(f"Loss function: {loss_fn}")
 
     # Setup save directory for optimizer states
     save_path = os.path.join(
@@ -65,13 +66,8 @@ def train_gnn(config):
         os.makedirs(os.path.dirname(save_path))
 
     # Summary logging
-    sample_batch = next(iter(train_loader))
-    sample_x = sample_batch.x.to(device)
-    sample_edge_index = sample_batch.edge_index.to(device)
-
-    logger.debug(sample_batch)
-
-    summary_str = summary(model, sample_x, sample_edge_index)
+    sample_input = get_sample_input(train_loader, dataset_config["task_type"], device)
+    summary_str = summary(model, **sample_input)
     logger.info("Model Summary:\n" + summary_str)
     with open("logs/tmp/model_summary.txt", "w") as out_file:
         out_file.write(summary_str)

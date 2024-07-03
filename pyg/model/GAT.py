@@ -19,7 +19,7 @@ class GAT_PyG(GAT_Base):
 class GAT_Custom(torch.nn.Module):
     def __init__(self,
                  in_channels,
-                 hidden_node_channels_per_head: int | list[int],
+                 hidden_channels_per_head: int | list[int],
                  num_layers: int, out_channels: int,
                  heads: int | list[int] = 8,
                  output_heads: int = 1,
@@ -37,10 +37,16 @@ class GAT_Custom(torch.nn.Module):
             Conv = GATv2Conv
         else:
             Conv = GATConv
+            
+        self.in_channels = in_channels
+        self.hidden_channels_per_head = hidden_channels_per_head
+        self.out_channels = out_channels
+        self.num_layers = num_layers
+        self.dropout = dropout
 
-        if type(hidden_node_channels_per_head) == int:
-            hidden_node_channels_per_head = [
-                hidden_node_channels_per_head] * (num_layers-1)
+        if type(hidden_channels_per_head) == int:
+            hidden_channels_per_head = [
+                hidden_channels_per_head] * (num_layers-1)
 
         if type(heads) == int:
             heads = [heads] * (num_layers-1)
@@ -48,18 +54,15 @@ class GAT_Custom(torch.nn.Module):
         self.conv = ModuleList()
         self.conv.append(
             Conv(in_channels,
-                 hidden_node_channels_per_head[0], heads[0], dropout=dropout)
+                 hidden_channels_per_head[0], heads[0], dropout=dropout)
         )
         for i in range(1, num_layers-1):
             self.conv.append(
-                Conv(hidden_node_channels_per_head[i-1]*heads[i-1],
-                     hidden_node_channels_per_head[i], heads[i], dropout=dropout)
+                Conv(hidden_channels_per_head[i-1]*heads[i-1],
+                     hidden_channels_per_head[i], heads[i], dropout=dropout)
             )
         self.conv.append(Conv(
-            hidden_node_channels_per_head[-1] * heads[-1], out_channels, output_heads, concat=False, dropout=dropout))
-
-        self.dropout = dropout
-        self.num_layers = num_layers
+            hidden_channels_per_head[-1] * heads[-1], out_channels, output_heads, concat=False, dropout=dropout))
 
         self.jk_mode = jk
         if not self.jk_mode in ["cat", None]:
@@ -69,24 +72,24 @@ class GAT_Custom(torch.nn.Module):
             self.jk = JumpingKnowledge(jk)
             jk_in_channels = out_channels
             for i in range(len(heads)):
-                jk_in_channels += heads[i] * hidden_node_channels_per_head[i]
+                jk_in_channels += heads[i] * hidden_channels_per_head[i]
             self.jk_linear = Linear(jk_in_channels, out_channels)
             
         self.skip_connection = skip_connection
         if self.skip_connection:
             self.skip_proj = ModuleList()
             self.skip_proj.append(
-                self.get_skip_proj(in_channels, hidden_node_channels_per_head[0]*heads[0])
+                self.get_skip_proj(in_channels, hidden_channels_per_head[0]*heads[0])
             )
             for i in range(1, num_layers-1):
                 self.skip_proj.append(
                     self.get_skip_proj(
-                        hidden_node_channels_per_head[i-1]*heads[i-1],
-                        hidden_node_channels_per_head[i]*heads[i]
+                        hidden_channels_per_head[i-1]*heads[i-1],
+                        hidden_channels_per_head[i]*heads[i]
                     )
                 )
             self.skip_proj.append(
-                self.get_skip_proj(hidden_node_channels_per_head[-1]*heads[-1], out_channels)
+                self.get_skip_proj(hidden_channels_per_head[-1]*heads[-1], out_channels)
             )
             
 
@@ -100,9 +103,7 @@ class GAT_Custom(torch.nn.Module):
         for conv in self.conv:
             conv.reset_parameters()
         if self.jk_mode:
-            for nn in self.jk_linear:
-                if isinstance(nn, Linear):
-                    nn.reset_parameters()
+            self.jk_linear.reset_parameters()
         if self.skip_connection:
             for nn in self.skip_proj:
                 if isinstance(nn, Linear):
