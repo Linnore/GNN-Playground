@@ -66,6 +66,15 @@ def add_train_parser(subparsers: argparse._SubParsersAction, parent_parser: argp
     model_params.add_argument('--jk', type=str, default=None)
     model_params.add_argument('--v2', action="store_true", default=None)
     model_params.add_argument('--edge_update', action="store_true", default=None)
+    
+    # AMLworld configuration
+    AMLworld_config = parser.add_argument_group("Arguments for AMLworld.")
+    AMLworld_config.add_argument('--add_egoID', action="store_true", default=None)
+    AMLworld_config.add_argument('--add_port', action="store_true", default=None)
+    AMLworld_config.add_argument('--add_time_delta', action="store_true", default=None)
+    # AMLworld_config.add_argument('--reverse_mp', action="store_true", default=None)
+    
+    
 
 
 def add_inference_parser(subparsers: argparse._SubParsersAction, parent_parser: argparse.ArgumentParser, config: config):

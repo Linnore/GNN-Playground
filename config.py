@@ -283,15 +283,20 @@ class config:
                 "num_epochs": 200,
                 "patience": 40,
                 "batch_size": 1024,
+                "add_egoID": True,
+                "add_port": True,
+                "add_time_delta": False,
             },
             "register_info":{
-                "description": "GINe in IBM MultiGNN's paper."
+                "description": "GINe in IBM MultiGNN's paper.",
+                "batch_norm": True
             },
             "hidden_channels": 64,
             "num_layers": 2,
             "num_neighbors": [-1, -1],
             "edge_update": True,
             "dropout": 0.1,
+            "batch_norm": True,
         }
     }
 
@@ -349,41 +354,35 @@ class config:
         # node_feature includes: a dummy 1, and EgoID
         "AMLworld-HI-Small":{
             "task_type": "single-label-EC",
-            "num_node_features": 2,
-            "num_edge_features": 8,
             "num_classes": 2
         },
         "AMLworld-HI-Medium":{
             "task_type": "single-label-EC",
-            "num_node_features": 2,
-            "num_edge_features": 8,
             "num_classes": 2
         },
         "AMLworld-HI-Large":{
             "task_type": "single-label-EC",
-            "num_node_features": 2,
-            "num_edge_features": 8,
             "num_classes": 2
         },
         "AMLworld-LI-Small":{
             "task_type": "single-label-EC",
-            "num_node_features": 2,
-            "num_edge_features": 8,
             "num_classes": 2
         },
         "AMLworld-LI-Medium":{
             "task_type": "single-label-EC",
-            "num_node_features": 2,
-            "num_edge_features": 8,
             "num_classes": 2
         },
         "AMLworld-LI-Large":{
             "task_type": "single-label-EC",
-            "num_node_features": 2,
-            "num_edge_features": 8,
             "num_classes": 2
         },
         
-        
 
+    }
+    
+    # Configuration of AMLworld dataset:
+    AMLworld_config = {
+        "add_egoID": True,
+        "add_port": True,
+        "add_time_delta": False,
     }

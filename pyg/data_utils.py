@@ -52,10 +52,28 @@ def get_data_SAGE(config):
             merge_from_data_list(PPI('dataset/PPI', split='test')),
         ]
     elif dataset.startswith("AMLworld"):
-        from pyg.custom_dataset.AMLworld import AMLworld, AddEgoIds
+        AMLworld_config = config["AMLworld_config"]
+        dataset_config = config["dataset_config"]
+        num_node_features = 1
+        num_edge_features = 4
+        from pyg.custom_dataset.AMLworld import AMLworld
         option = dataset.partition("-")[-1]
-        dataset = AMLworld('dataset/AMLworld', opt=option)
-        batch_transform = AddEgoIds()
+        dataset = AMLworld(
+            'dataset/AMLworld', 
+            opt=option, 
+            load_ports=AMLworld_config["add_port"], load_time_delta=AMLworld_config["add_time_delta"],
+        )
+        if AMLworld_config["add_port"]:
+            num_edge_features += 2
+        if AMLworld_config["add_time_delta"]:
+            num_edge_features += 2
+        if AMLworld_config["add_egoID"]:
+            from pyg.custom_dataset.AMLworld import AddEgoIds
+            batch_transform = AddEgoIds()
+            num_node_features += 1
+        dataset_config["num_node_features"] = num_node_features
+        dataset_config["num_edge_features"] = num_edge_features
+        
         
     else:
         raise NotImplementedError('Unsupported dataset.')

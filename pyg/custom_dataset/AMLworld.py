@@ -155,12 +155,14 @@ class AddEgoIds(BaseTransform):
 
 def z_norm(data):
     std = data.std(0)
-    std = torch.where(std == 0, torch.tensor(1, dtype=torch.float32).cpu(), std)
+    std = torch.where(std == 0, torch.tensor(
+        1, dtype=torch.float32).cpu(), std)
     return (data - data.mean(0)) / std
+
 
 class AMLworld(InMemoryDataset):
 
-    def __init__(self, root, opt="HI-Small", transform=None, pre_transform=None, pre_fileter=None, force_download=False, verbose=True, *args, **kwargs):
+    def __init__(self, root, opt="HI-Small", load_ports=True, load_time_delta=False, transform=None, pre_transform=None, pre_fileter=None, force_download=False, verbose=True, *args, **kwargs):
         """
         Args:
             opt (str, optional): _description_. Defaults to "HI-Small".
@@ -182,10 +184,30 @@ class AMLworld(InMemoryDataset):
         super().__init__(root, transform, pre_transform, pre_fileter, *args, **kwargs)
 
         self.load(self.processed_paths[0])
-        
+
+        # Select features based on attribute options
+        feature_cols = []
+        exclude_feature_name = []
+        if not load_ports:
+            exclude_feature_name.extend(["In-Port", "Out-Port"])
+        if not load_time_delta:
+            exclude_feature_name.extend(["In-TimeDelta", "Out-TimeDelta"])
+        exclude_feature_name = set(exclude_feature_name)
+        cnt_newID = 0
+        feature_newID = {}
+        for feature, id in self._data.edge_features_colID.items():
+            if feature not in exclude_feature_name:
+                feature_cols.append(id)
+                feature_newID[feature] = cnt_newID
+                cnt_newID += 1
+        self._data.edge_attr = self._data.edge_attr[:, feature_cols]
+        self._data.edge_features_colID = feature_newID
+
         if not self.processed_in_this_call and self.verbose:
             from loguru import logger
             logger.info(self._data.information)
+            edge_features = list(feature_newID.keys())
+            logger.info(f'Edge features being used: {edge_features}')
 
     @property
     def raw_file_names(self):
@@ -228,7 +250,7 @@ class AMLworld(InMemoryDataset):
     def process(self):
         self.processed_in_this_call = True
         infor_str_list = []
-        
+
         if self.verbose:
             from loguru import logger
 
@@ -401,11 +423,11 @@ class AMLworld(InMemoryDataset):
         te_inds = torch.cat(split_inds[2])
 
         infor_str_list.append(f"Total train samples: {tr_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-                                   f"{y[tr_inds].float().mean() * 100 :.2f}% || Train days: {split[0][:5]}")
+                              f"{y[tr_inds].float().mean() * 100 :.2f}% || Train days: {split[0][:5]}")
         infor_str_list.append(f"Total val samples: {val_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-                                   f"{y[val_inds].float().mean() * 100:.2f}% || Val days: {split[1][:5]}")
+                              f"{y[val_inds].float().mean() * 100:.2f}% || Val days: {split[1][:5]}")
         infor_str_list.append(f"Total test samples: {te_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-                                   f"{y[te_inds].float().mean() * 100:.2f}% || Test days: {split[2][:5]}")
+                              f"{y[te_inds].float().mean() * 100:.2f}% || Test days: {split[2][:5]}")
         if self.verbose:
             logger.info(f"Total train samples: {tr_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
                         f"{y[tr_inds].float().mean() * 100 :.2f}% || Train days: {split[0][:5]}")
@@ -450,7 +472,6 @@ class AMLworld(InMemoryDataset):
         te_edge_attr = edge_attr[e_te]
         te_y = y[e_te]
         te_edge_times = timestamps[e_te]
-
         te_data = GraphData(
             x=te_x,
             y=te_y,
@@ -482,14 +503,25 @@ class AMLworld(InMemoryDataset):
         for id, feature in enumerate(edge_features):
             edge_features_colID[feature] = id
 
-        infor_str_list.append(
-            f'Edge features being used: {edge_features}')
+        # infor_str_list.append(
+        #     f'Edge features being used: {edge_features}')
         infor_str_list.append(
             f'Node features being used: {node_features} ("Feature" is a placeholder feature of all 1s)')
         if self.verbose:
-            logger.info(f'Edge features being used: {edge_features}')
+            #     logger.info(f'Edge features being used: {edge_features}')
             logger.info(
                 f'Node features being used: {node_features} ("Feature" is a placeholder feature of all 1s)')
+
+        # Normalize the edge attribute
+        norm_col = []
+        for feature, id in edge_features_colID.items():
+            if feature != "Payment Format":
+                norm_col.append(id)
+
+        tr_data.edge_attr[:, norm_col] = z_norm(tr_data.edge_attr[:, norm_col])
+        val_data.edge_attr[:, norm_col] = z_norm(
+            val_data.edge_attr[:, norm_col])
+        te_data.edge_attr[:, norm_col] = z_norm(te_data.edge_attr[:, norm_col])
 
         tmp_edge_attr = torch.zeros(
             (edge_attr.shape[0], tr_data.edge_attr.shape[-1]))
@@ -514,14 +546,6 @@ class AMLworld(InMemoryDataset):
             test_mask=test_mask,
             timestamps=timestamps,
         )
-        
-        # Normalize the edge attribute
-        norm_col = []
-        for feature, id in edge_features_colID.items():
-            if feature != "Payment Format":
-                norm_col.append(id)
-        data.edge_attr[:, norm_col] = z_norm(data.edge_attr[:, norm_col])
-        
 
         data.edge_features_colID = edge_features_colID
         data.information = "\n".join(infor_str_list)
@@ -538,11 +562,6 @@ class AMLworld(InMemoryDataset):
 
         # TODO: Process pattern tag into data object
         raw_pattern_file = os.path.join(self.raw_dir, self.opt+"_Patterns.txt")
-        
-    
-    
-
-
 
 
 def main():

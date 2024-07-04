@@ -150,18 +150,17 @@ class GINe(GIN_Custom):
                  *args,
                  **kwargs):
         super().__init__(
-            in_channels=hidden_channels, 
+            in_channels=hidden_channels,
             hidden_channels=hidden_channels,
             out_channels=hidden_channels, GINE=True, *args, **kwargs)
-        
-        self.batch_norm = batch_norm 
+
+        self.batch_norm = batch_norm
         self.in_channels = in_channels
         self.out_channels = out_channels
-        
-        self.node_emb = Linear(self.in_channels, self.hidden_channels)
-        self.edge_emb = Linear(edge_dim, self.hidden_channels) 
-        self.edge_updates = edge_updates
 
+        self.node_emb = Linear(self.in_channels, self.hidden_channels)
+        self.edge_emb = Linear(edge_dim, self.hidden_channels)
+        self.edge_updates = edge_updates
 
         self.convs = ModuleList()
         self.emlps = ModuleList()
@@ -173,7 +172,8 @@ class GINe(GIN_Custom):
             )
             if self.edge_updates:
                 self.emlps.append(
-                        self.init_MLP_for_GIN(3 * hidden_channels, hidden_channels, 2)
+                    self.init_MLP_for_GIN(
+                        3 * hidden_channels, hidden_channels, 2)
                 )
             self.convs.append(conv)
             if self.batch_norm:
@@ -197,7 +197,7 @@ class GINe(GIN_Custom):
 
         xs = []
         for i in range(self.num_layers):
-            # x = F.dropout(x, p=self.dropout, training=self.training)
+            # x = F.dropout(x, p=self.dropout, training=self.training) Need full neighborhood information to capture local structural pattern
             if self.skip_connection:
                 residual = self.skip_proj[i](x)
             x = self.conv[i](x, edge_index, edge_attr)
@@ -206,20 +206,21 @@ class GINe(GIN_Custom):
             x = F.relu(x)
             if self.jk_mode != None:
                 xs.append(x)
-                
+
             if self.edge_updates:
                 if self.skip_connection:
                     residual = self.skip_proj[i](edge_attr)
-                edge_attr = self.emlps[i](torch.cat([x[src], x[dst], edge_attr], -1))
+                edge_attr = self.emlps[i](
+                    torch.cat([x[src], x[dst], edge_attr], -1))
                 edge_attr = edge_attr + residual
-                
+
         out = torch.cat([x[src], x[dst], edge_attr], -1)
         # x = torch.cat([x[src], x[dst], edge_attr], -1).relu() # Dont known whether the relu is useful or not
-        
+
         # Original:
         # x = x[edge_index.T].reshape(-1, 2 * self.hidden_channels).relu()
         # x = torch.cat((x, edge_attr.view(-1, edge_attr.shape[1])), 1)
-        
+
         out = self.mlp(out)
 
         return out

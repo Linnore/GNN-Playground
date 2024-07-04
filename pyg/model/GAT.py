@@ -32,12 +32,12 @@ class GAT_Custom(torch.nn.Module):
                  **kwargs):
         super().__init__()
         self.config = config
-        
+
         if v2:
             Conv = GATv2Conv
         else:
             Conv = GATConv
-            
+
         self.in_channels = in_channels
         self.hidden_channels_per_head = hidden_channels_per_head
         self.out_channels = out_channels
@@ -74,12 +74,13 @@ class GAT_Custom(torch.nn.Module):
             for i in range(len(heads)):
                 jk_in_channels += heads[i] * hidden_channels_per_head[i]
             self.jk_linear = Linear(jk_in_channels, out_channels)
-            
+
         self.skip_connection = skip_connection
         if self.skip_connection:
             self.skip_proj = ModuleList()
             self.skip_proj.append(
-                self.get_skip_proj(in_channels, hidden_channels_per_head[0]*heads[0])
+                self.get_skip_proj(
+                    in_channels, hidden_channels_per_head[0]*heads[0])
             )
             for i in range(1, num_layers-1):
                 self.skip_proj.append(
@@ -89,9 +90,9 @@ class GAT_Custom(torch.nn.Module):
                     )
                 )
             self.skip_proj.append(
-                self.get_skip_proj(hidden_channels_per_head[-1]*heads[-1], out_channels)
+                self.get_skip_proj(
+                    hidden_channels_per_head[-1]*heads[-1], out_channels)
             )
-            
 
     def get_skip_proj(self, in_channels, out_channels):
         if in_channels == out_channels:
@@ -120,7 +121,7 @@ class GAT_Custom(torch.nn.Module):
             x = F.elu(x)
             if self.jk_mode != None:
                 xs.append(x)
-                
+
         if self.jk_mode != None:
             x = self.jk(xs)
             x = self.jk_linear(x)

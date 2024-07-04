@@ -197,7 +197,8 @@ Modify the settings of corresponding models in `config.py` to configure the mode
 - GraphSAGE
 - GAT
 - GIN
-- SP-GNN
+- PNA
+- MultiGNN (from IBM's paper, three adaptions)
 
 ### Framework setup:
 
@@ -216,21 +217,25 @@ Modify the settings of corresponding models in `config.py` to configure the mode
       - [ ] Benchmark for Inductive Learning on SAINT paper datasets.
       - [x] Benchmark for Inductive Learning on PPI
       - [ ] Edge update
-    - [ ] 
-  - [ ] GIN
-    - [ ] Benchmark on Planetoid. (SP-GNN paper)
-    - [ ] Framework codding to support graph-level tasks.
-  - [ ] SP-GNN
-    - [ ] Benchmark for the NC tasks.
-    - [ ] Implement for AML datasets.
+  - [-] PNA
+    - [x] Benchmark on Planetoid.
+    - [ ] Edge Update
+    - [ ] Reverse Message Passing
+  - [-] GIN
+    - [x] Benchmark on Planetoid. 
+    - [x] Edge Update
+    - [ ] Reverse Message Passing
+
   
-- [ ] Deep Graph Library
-- [ ] Other explorations.
-  - [ ] SALIENT with multi-GPU system.
-  - [ ] ???
+- [ ] Deep Graph Library: See branch dgl_playground
+
   
 
 ### Playground Task
 - Node classification
   - Cora
   - Citeers
+  - PubMed
+  - PPI
+- Edge Classification
+  - For AML purpose: AWLworld
