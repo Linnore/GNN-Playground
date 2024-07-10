@@ -144,7 +144,7 @@ class GINe(GIN_Custom):
                  in_channels: int,
                  hidden_channels: int,
                  out_channels: int,
-                 edge_updates: bool = False,
+                 edge_update: bool = False,
                  edge_dim=None,
                  batch_norm=True,
                  *args,
@@ -160,9 +160,9 @@ class GINe(GIN_Custom):
 
         self.node_emb = Linear(self.in_channels, self.hidden_channels)
         self.edge_emb = Linear(edge_dim, self.hidden_channels)
-        self.edge_updates = edge_updates
+        self.edge_update = edge_update
 
-        self.convs = ModuleList()
+        self.conv = ModuleList()
         self.emlps = ModuleList()
         self.batch_norms = ModuleList()
         for _ in range(self.num_layers):
@@ -170,12 +170,12 @@ class GINe(GIN_Custom):
                 nn=self.init_MLP_for_GIN(hidden_channels, hidden_channels, 2),
                 edge_dim=self.hidden_channels
             )
-            if self.edge_updates:
+            if self.edge_update:
                 self.emlps.append(
                     self.init_MLP_for_GIN(
                         3 * hidden_channels, hidden_channels, 2)
                 )
-            self.convs.append(conv)
+            self.conv.append(conv)
             if self.batch_norm:
                 self.batch_norms.append(BatchNorm(self.hidden_channels))
 
@@ -207,20 +207,19 @@ class GINe(GIN_Custom):
             if self.jk_mode != None:
                 xs.append(x)
 
-            if self.edge_updates:
+            if self.edge_update:
                 if self.skip_connection:
                     residual = self.skip_proj[i](edge_attr)
                 edge_attr = self.emlps[i](
                     torch.cat([x[src], x[dst], edge_attr], -1))
-                edge_attr = edge_attr + residual
+                edge_attr = edge_attr + residual if self.skip_connection else edge_attr
 
-        out = torch.cat([x[src], x[dst], edge_attr], -1)
-        # x = torch.cat([x[src], x[dst], edge_attr], -1).relu() # Dont known whether the relu is useful or not
+        # Dont known whether the relu is useful or not
+        out = torch.cat([x[src], x[dst], edge_attr], -1).relu() 
+        out = self.mlp(out)
+        return out
 
         # Original:
         # x = x[edge_index.T].reshape(-1, 2 * self.hidden_channels).relu()
         # x = torch.cat((x, edge_attr.view(-1, edge_attr.shape[1])), 1)
-
-        out = self.mlp(out)
-
-        return out
+        # return self.mlp(x)

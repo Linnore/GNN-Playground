@@ -105,13 +105,14 @@ def get_model(config, train_loader):
                 **model_config
             )
         case "GINe":
+            
             model = GINe(
                 in_channels=dataset_config["num_node_features"],
                 out_channels=dataset_config["num_classes"],
                 hidden_channels=model_config.pop("hidden_channels"),
                 edge_dim=dataset_config["num_edge_features"],
                 num_layers=model_config.pop("num_layers"),
-                edge_uupdate=model_config.pop("edge_update", False),
+                edge_update=model_config.pop("edge_update", False),
                 batch_norm=model_config.pop("batch_norm", True),
                 config=archive_config,
                 **model_config
