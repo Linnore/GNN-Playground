@@ -45,7 +45,7 @@ Add the custom models and (local) datasets following the above given templates i
 
 #### Logging Mode
 
-This project implements two logging modes:
+This project can run with two logging modes:
 - MLflow with local file storage (default).
 - MLflow with a (remote) tracking server.
  
@@ -165,6 +165,15 @@ if not dst_source.startswith(("dbfs:","s3:","mlflow-artifacts:")) and not os.pat
         raise MlflowExportImportException(f"'source' argument for MLflowClient.create_model_version does not exist: {dst_source}", http_status_code=404)
 ```
 
+#### Delete and Permanently Delete Experiments and Runs
+One can delete the experiments and runs using the MLflow UI. However, this would only tag them as `deleted` in the UI but not permanently deleted on storage. To permanently delete the experiments or runs on storage, one can use the `mlflow gc [OPTION]`. For example, to permanently delete all runs that are deleted using the UI, one can simply
+
+```bash
+
+export MLFLOW_TRACKING_URI=http://127.0.0.1:8080
+mlflow gc
+```
+
 
 #### Authentication Issue:
 The current `mlflow-export-import` does not implement proper authentication for the http-client. If authentication errors occur when using this tool, please check [the solution here](https://github.com/mlflow/mlflow-export-import/issues/158) by modifying the source codes of corresponding header.
@@ -174,7 +183,7 @@ The current `mlflow-export-import` does not implement proper authentication for 
 
 ```bash
 
-python run_pyg.py train GraphSAGE-mean Cora --auth --device cpu
+python run_pyg.py train GraphSAGE-mean Cora 
 ```
 
  - mode: must choose from `train`, `inference`
@@ -183,11 +192,11 @@ python run_pyg.py train GraphSAGE-mean Cora --auth --device cpu
    - GraphSAGE
    - GAT
    - GIN
+   - PNA
   
 Modify the settings of corresponding models in `config.py` to configure the models.
- - (optional) mlflow_server: use the MLflow tracking server provided in the `config.py`.
- - (optional) auth: use the authentication credentials in the `config.py` to login the MLflow tracking server.
- - (optional) device: specify the device.
+
+ - TODO: Add argument description here. 
   
 
 
@@ -238,4 +247,6 @@ Modify the settings of corresponding models in `config.py` to configure the mode
   - PubMed
   - PPI
 - Edge Classification
+  - For AML purpose: AWLworld
+- Subgraph/Graph Classification
   - For AML purpose: AWLworld

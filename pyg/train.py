@@ -86,7 +86,7 @@ def train_gnn(config):
 
     # Training loop
     patience = general_config["patience"]
-    if patience == None:
+    if patience == None or patience <= 0:
         patience = general_config["num_epochs"]
 
     # Setup training steps according to task type

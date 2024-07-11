@@ -29,7 +29,8 @@ class GIN_Custom(torch.nn.Module):
                  skip_connection: bool = False,
                  config={},
                  *args,
-                 **kwargs):
+                 **kwargs,
+                 ):
         super().__init__()
         self.config = config
 
@@ -47,8 +48,8 @@ class GIN_Custom(torch.nn.Module):
         if type(hidden_channels) == int:
             hidden_channels = [hidden_channels] * (num_layers-1)
 
-        self.conv = ModuleList()
-        self.conv.append(
+        self.convs = ModuleList()
+        self.convs.append(
             self.Conv(nn=self.init_MLP_for_GIN(
                 in_channels,
                 hidden_channels[0],
@@ -56,14 +57,14 @@ class GIN_Custom(torch.nn.Module):
             ))
         )
         for i in range(1, num_layers-1):
-            self.conv.append(
+            self.convs.append(
                 self.Conv(self.init_MLP_for_GIN(
                     hidden_channels[i-1],
                     hidden_channels[i],
                     num_MLP_layers
                 ))
             )
-        self.conv.append(self.Conv(self.init_MLP_for_GIN(
+        self.convs.append(self.Conv(self.init_MLP_for_GIN(
             hidden_channels[-1],
             out_channels,
             num_MLP_layers
@@ -111,7 +112,7 @@ class GIN_Custom(torch.nn.Module):
             return Linear(in_channels, out_channels)
 
     def reset_parameters(self):
-        for conv in self.conv:
+        for conv in self.convs:
             conv.reset_parameters()
         if self.jk_mode:
             self.jk_linear.reset_parameters()
@@ -126,7 +127,7 @@ class GIN_Custom(torch.nn.Module):
             x = F.dropout(x, p=self.dropout, training=self.training)
             if self.skip_connection:
                 residual = self.skip_proj[i](x)
-            x = self.conv[i](x, edge_index)
+            x = self.convs[i](x, edge_index)
             x = x + residual if self.skip_connection else x
             x = F.elu(x)
             if self.jk_mode != None:
@@ -148,21 +149,26 @@ class GINe(GIN_Custom):
                  edge_dim=None,
                  batch_norm=True,
                  *args,
-                 **kwargs):
+                 **kwargs
+                 ):
         super().__init__(
             in_channels=hidden_channels,
             hidden_channels=hidden_channels,
-            out_channels=hidden_channels, GINE=True, *args, **kwargs)
+            out_channels=hidden_channels,
+            GINE=True,
+            *args,
+            **kwargs,
+        )
 
         self.batch_norm = batch_norm
         self.in_channels = in_channels
         self.out_channels = out_channels
+        self.edge_update = edge_update
 
         self.node_emb = Linear(self.in_channels, self.hidden_channels)
         self.edge_emb = Linear(edge_dim, self.hidden_channels)
-        self.edge_update = edge_update
 
-        self.conv = ModuleList()
+        self.convs = ModuleList()
         self.emlps = ModuleList()
         self.batch_norms = ModuleList()
         for _ in range(self.num_layers):
@@ -172,10 +178,13 @@ class GINe(GIN_Custom):
             )
             if self.edge_update:
                 self.emlps.append(
-                    self.init_MLP_for_GIN(
-                        3 * hidden_channels, hidden_channels, 2)
+                    Sequential(
+                        Linear(3 * self.hidden_channels, self.hidden_channels), 
+                        ReLU(),
+                        Linear(self.hidden_channels, self.hidden_channels)
+                    )
                 )
-            self.conv.append(conv)
+            self.convs.append(conv)
             if self.batch_norm:
                 self.batch_norms.append(BatchNorm(self.hidden_channels))
 
@@ -189,6 +198,26 @@ class GINe(GIN_Custom):
             Linear(25, self.out_channels)
         )
 
+    def reset_parameters(self):
+        for conv in self.convs:
+            conv.reset_parameters()
+        if self.jk_mode:
+            self.jk_linear.reset_parameters()
+        if self.skip_connection:
+            for nn in self.skip_proj:
+                if isinstance(nn, Linear):
+                    nn.reset_parameters()
+        for layer in self.mlp:
+            if isinstance(layer, Linear):
+                layer.reset_parameters()
+        for layer in self.emlps:
+            if isinstance(layer, Linear):
+                layer.reset_parameters()
+        self.node_emb.reset_parameters()
+        self.edge_emb.reset_parameters()
+        for layer in self.batch_norms:
+            layer.reset_parameters()
+
     def forward(self, x, edge_index, edge_attr):
         src, dst = edge_index
 
@@ -200,7 +229,7 @@ class GINe(GIN_Custom):
             # x = F.dropout(x, p=self.dropout, training=self.training) Need full neighborhood information to capture local structural pattern
             if self.skip_connection:
                 residual = self.skip_proj[i](x)
-            x = self.conv[i](x, edge_index, edge_attr)
+            x = self.convs[i](x, edge_index, edge_attr)
             x = self.batch_norms[i](x) if self.batch_norm else x
             x = x + residual if self.skip_connection else x
             x = F.relu(x)
@@ -214,12 +243,12 @@ class GINe(GIN_Custom):
                     torch.cat([x[src], x[dst], edge_attr], -1))
                 edge_attr = edge_attr + residual if self.skip_connection else edge_attr
 
-        # Dont known whether the relu is useful or not
-        out = torch.cat([x[src], x[dst], edge_attr], -1).relu() 
+        # Dont know whether the relu is useful or not
+        out = torch.cat([x[src].relu(), x[dst].relu(), edge_attr], -1)
         out = self.mlp(out)
         return out
 
-        # Original:
+        # Original (slow):
         # x = x[edge_index.T].reshape(-1, 2 * self.hidden_channels).relu()
         # x = torch.cat((x, edge_attr.view(-1, edge_attr.shape[1])), 1)
         # return self.mlp(x)

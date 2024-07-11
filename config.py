@@ -293,12 +293,14 @@ class config:
             },
             "register_info":{
                 "description": "GINe in IBM MultiGNN's paper.",
-                "add_time_stamp": "will be overwritten",
-                "add_egoID": "will be overwritten",
-                "add_port": "will be overwritten",
-                "add_time_delta": "will be overwritten",
-                "batch_norm": "will be overwritten",
-                "ibm_split": "will be overwritten",
+                "tags":{
+                    "add_time_stamp": "will be overwritten",
+                    "add_egoID": "will be overwritten",
+                    "add_port": "will be overwritten",
+                    "add_time_delta": "will be overwritten",
+                    "batch_norm": "will be overwritten",
+                    "ibm_split": "will be overwritten",
+                }
             },
             "hidden_channels": 66,
             "num_layers": 2,
