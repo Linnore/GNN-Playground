@@ -33,9 +33,9 @@ def add_train_parser(subparsers: argparse._SubParsersAction, parent_parser: argp
         '--sample_when_predict', action=argparse.BooleanOptionalAction, default=None)
     general_config.add_argument('--seed', type=int, default=None)
     general_config.add_argument('--device', default=None)
-    general_config.add_argument('--tqdm', action="store_true", default=None)
+    general_config.add_argument('--tqdm', action=argparse.BooleanOptionalAction, default=None)
     general_config.add_argument(
-        '--register_model', action="store_true", default=None)
+        '--register_model', action=argparse.BooleanOptionalAction, default=None)
     general_config.add_argument(
         '--criterion', type=str, default=None, choices=["loss", "accuracy", "f1"])
     general_config.add_argument('--num_epochs', type=int, default=None)
@@ -49,8 +49,8 @@ def add_train_parser(subparsers: argparse._SubParsersAction, parent_parser: argp
     hyperparameters.add_argument('--weight_decay', type=float, default=None)
     
     # Loss function hyperparameters
-    hyperparameters.add_argument('--weighted_BCE', action="store_true", default=None)
-    hyperparameters.add_argument('--weighted_CE', action="store_true", default=None)
+    hyperparameters.add_argument('--weighted_BCE', action=argparse.BooleanOptionalAction, default=None)
+    hyperparameters.add_argument('--weighted_CE', action=argparse.BooleanOptionalAction, default=None)
     
 
     # Model hyperparameters
@@ -64,15 +64,21 @@ def add_train_parser(subparsers: argparse._SubParsersAction, parent_parser: argp
         '--num_neighbors', type=int, nargs="+", default=None)
     model_params.add_argument('--dropout', type=float, default=None)
     model_params.add_argument('--jk', type=str, default=None)
-    model_params.add_argument('--v2', action="store_true", default=None)
-    model_params.add_argument('--edge_update', action="store_true", default=None)
+    model_params.add_argument('--v2', action=argparse.BooleanOptionalAction, default=None)
+    model_params.add_argument('--edge_update', action=argparse.BooleanOptionalAction, default=None)
+    model_params.add_argument('--batch_norm', action=argparse.BooleanOptionalAction, default=None)
+    
+    
     
     # AMLworld configuration
     AMLworld_config = parser.add_argument_group("Arguments for AMLworld.")
-    AMLworld_config.add_argument('--add_egoID', action="store_true", default=None)
-    AMLworld_config.add_argument('--add_port', action="store_true", default=None)
-    AMLworld_config.add_argument('--add_time_delta', action="store_true", default=None)
-    # AMLworld_config.add_argument('--reverse_mp', action="store_true", default=None)
+    AMLworld_config.add_argument('--add_time_stamp', action=argparse.BooleanOptionalAction, default=None)
+    AMLworld_config.add_argument('--add_egoID', action=argparse.BooleanOptionalAction, default=None)
+    AMLworld_config.add_argument('--add_port', action=argparse.BooleanOptionalAction, default=None)
+    AMLworld_config.add_argument('--add_time_delta', action=argparse.BooleanOptionalAction, default=None)
+    AMLworld_config.add_argument('--reverse_mp', action=argparse.BooleanOptionalAction, default=None)
+    AMLworld_config.add_argument('--ibm_split', action=argparse.BooleanOptionalAction, default=None)
+    AMLworld_config.add_argument('--force_reload', action=argparse.BooleanOptionalAction, default=None)
     
     
 
@@ -105,7 +111,7 @@ def add_inference_parser(subparsers: argparse._SubParsersAction, parent_parser: 
         '--sample_when_predict', action=argparse.BooleanOptionalAction, default=None)
     general_config.add_argument('--seed', type=int, default=None)
     general_config.add_argument('--device', default=None)
-    general_config.add_argument('--tqdm', action="store_true", default=None)
+    general_config.add_argument('--tqdm', action=argparse.BooleanOptionalAction, default=None)
 
 def add_evaluate_parser(subparsers: argparse._SubParsersAction, parent_parser: argparse.ArgumentParser, config: config):
     parser = subparsers.add_parser(
@@ -131,7 +137,7 @@ def add_evaluate_parser(subparsers: argparse._SubParsersAction, parent_parser: a
         '--sample_when_predict', action=argparse.BooleanOptionalAction, default=None)
     general_config.add_argument('--seed', type=int, default=None)
     general_config.add_argument('--device', default=None)
-    general_config.add_argument('--tqdm', action="store_true", default=None)
+    general_config.add_argument('--tqdm', action=argparse.BooleanOptionalAction, default=None)
     
 
 def create_parser(config: config):
@@ -140,7 +146,7 @@ def create_parser(config: config):
 
     # Parser for common arguments
     parent_parser = argparse.ArgumentParser(add_help=False)
-    parent_parser.add_argument('--debug', action="store_true")
+    parent_parser.add_argument('--debug', action=argparse.BooleanOptionalAction)
 
     # MLflow settings
     mlflow_config = parent_parser.add_argument_group('MLflow configuration')

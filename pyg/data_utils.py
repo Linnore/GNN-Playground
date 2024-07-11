@@ -4,8 +4,8 @@ import torch_geometric.transforms as T
 from torch_geometric.data import Data, Batch
 from torch_geometric.loader import NeighborLoader, LinkNeighborLoader, DataLoader
 
-from copy import deepcopy
 from loguru import logger
+import pprint
 
 
 def merge_from_data_list(data_list):
@@ -23,7 +23,7 @@ def merge_from_data_list(data_list):
 def get_data_SAGE(config):
     dataset_transform = T.Compose([T.NormalizeFeatures()])
     batch_transform = None
-    
+
     dataset = config["dataset"]
     if dataset in ['Cora', 'CiteSeer', 'PubMed']:
         from torch_geometric.datasets import Planetoid
@@ -43,7 +43,8 @@ def get_data_SAGE(config):
         dataset = Yelp('dataset/Yelp', transform=dataset_transform)
     elif dataset == "AmazonProducts":
         from torch_geometric.datasets import AmazonProducts
-        dataset = AmazonProducts('dataset/AmazonProducts', transform=dataset_transform)
+        dataset = AmazonProducts(
+            'dataset/AmazonProducts', transform=dataset_transform)
     elif dataset == "PPI":
         from torch_geometric.datasets import PPI
         dataset = [
@@ -53,28 +54,33 @@ def get_data_SAGE(config):
         ]
     elif dataset.startswith("AMLworld"):
         AMLworld_config = config["AMLworld_config"]
+        logger.info(f"AMLworld configuration: {pprint.pformat(AMLworld_config)}")
         dataset_config = config["dataset_config"]
-        num_node_features = 1
-        num_edge_features = 4
+
         from pyg.custom_dataset.AMLworld import AMLworld
         option = dataset.partition("-")[-1]
-        dataset = AMLworld(
-            'dataset/AMLworld', 
-            opt=option, 
-            load_ports=AMLworld_config["add_port"], load_time_delta=AMLworld_config["add_time_delta"],
-        )
-        if AMLworld_config["add_port"]:
-            num_edge_features += 2
-        if AMLworld_config["add_time_delta"]:
-            num_edge_features += 2
+        dataset = []
+        for split in ["train", "val", "test"]:
+            dataset.append(
+                AMLworld(
+                    'dataset/AMLworld',
+                    opt=option,
+                    split=split,
+                    load_time_stamp=AMLworld_config["add_time_stamp"],
+                    load_ports=AMLworld_config["add_port"], 
+                    load_time_delta=AMLworld_config["add_time_delta"],
+                    ibm_split=AMLworld_config["ibm_split"],
+                    force_reload=AMLworld_config["force_reload"],
+                    verbose=False,
+                )[0]
+            )
+            
         if AMLworld_config["add_egoID"]:
             from pyg.custom_dataset.AMLworld import AddEgoIds
             batch_transform = AddEgoIds()
-            num_node_features += 1
-        dataset_config["num_node_features"] = num_node_features
-        dataset_config["num_edge_features"] = num_edge_features
-        
-        
+        dataset_config["num_node_features"] = dataset[0].x.shape[1] + \
+            int(AMLworld_config["add_egoID"])
+        dataset_config["num_edge_features"] = dataset[0].edge_attr.shape[1]
     else:
         raise NotImplementedError('Unsupported dataset.')
 
@@ -83,7 +89,7 @@ def get_data_SAGE(config):
     # Node Classification
     task_type = config["dataset_config"]["task_type"]
     if task_type in ["single-label-NC", "multi-label-NC"]:
-        # For dataset containing one graph
+        # For dataset containing one graph and indicate split by mask
         if len(dataset) == 1:
             data = dataset[0]
             if general_config["framework"] == "transductive":
@@ -105,7 +111,8 @@ def get_data_SAGE(config):
                     train_data = data.subgraph(data.train_mask)
                     val_data = data
                     test_data = data
-        # For dataset containing multiple graphs. Strictly inductive learning by default.
+
+        # For dataset with splits as different graphs
         else:
             train_data, val_data, test_data = dataset
 
@@ -115,6 +122,7 @@ def get_data_SAGE(config):
             test_data.test_mask = torch.ones(test_data.num_nodes, dtype=bool)
 
     elif task_type in ["single-label-EC"]:
+        # For dataset containing one graph and indicate split by mask
         if len(dataset) == 1:
             data = dataset[0]
             if general_config["framework"] == "transductive":
@@ -137,7 +145,8 @@ def get_data_SAGE(config):
                     train_data = data.edge_subgraph(data.train_mask)
                     val_data = data
                     test_data = data
-        # For dataset containing multiple graphs. Strictly inductive learning by default.
+
+        # For dataset with splits as different graphs
         else:
             train_data, val_data, test_data = dataset
 
@@ -262,16 +271,16 @@ def get_loader_no_sampling(train_data, val_data, test_data, transform, config):
 
     logger.info(
         f"\ntrain_data={train_data}\nval_data={val_data}\ntest_data={test_data}")
-    
+
     if transform:
         train_data = transform(train_data)
         val_data = transform(val_data)
         test_data = transform(test_data)
-    
+
     train_loader = DataLoader([train_data])
     val_loader = DataLoader([val_data])
     test_loader = DataLoader([test_data])
-    
+
     train_loader.data = train_data
     val_loader.data = val_data
     test_loader.data = test_data
@@ -282,9 +291,10 @@ def get_loader_no_sampling(train_data, val_data, test_data, transform, config):
 def get_loader_graph_batch(train_dataset, val_dataset, test_dataset, transform, config):
     batch_size = config["hyperparameters"]["batch_size"]
     general_config = config["general_config"]
-    
+
     if general_config["sampling_strategy"] == "GraphBatching" and config["dataset_config"]["task_type"].endswith("-EC"):
-        raise NotImplementedError("Graph Batching is not implemented for edge classification task!")
+        raise NotImplementedError(
+            "Graph Batching is not implemented for edge classification task!")
 
     if transform:
         train_dataset = transform(train_dataset)
@@ -309,7 +319,7 @@ def get_loader_graph_batch(train_dataset, val_dataset, test_dataset, transform, 
         num_workers=general_config["num_workers"],
         persistent_workers=general_config["persistent_workers"],
     )
-    
+
     # TODO: save data into loader
 
     return train_loader, val_loader, test_loader
@@ -337,7 +347,7 @@ def get_loader(config):
 def get_inference_data_SAGE(config):
     dataset = config["dataset"]
     batch_transform = None
-    
+
     if dataset in [
         "Cora",
         "CiteSeer",
@@ -349,7 +359,8 @@ def get_inference_data_SAGE(config):
         "AmazonProducts",
         "PPI",
     ]:
-        train_data, val_data, test_data, batch_transform = get_data_SAGE(config)
+        train_data, val_data, test_data, batch_transform = get_data_SAGE(
+            config)
     else:
         logger.info("TODO: support custom dataset.")
         unlabelled_data = None
@@ -422,16 +433,16 @@ def get_inference_loader_SAINT(data: Data, config: dict):
 def get_inference_loader_no_sampling(infer_data: Data, transform, config: dict):
     logger.warning(
         "Sampling strategy is set to be None. Full graph will be used without mini-batching! Batch_size is ignored! ")
-    
+
     logger.info(
         f"\ninference_data={infer_data}")
 
     if transform:
         infer_data = transform(infer_data)
-        
+
     infer_loader = DataLoader([infer_data])
     infer_loader.data = infer_data
-    
+
     return infer_loader
 
 

@@ -277,26 +277,35 @@ class config:
                 "sampling_strategy": "SAGE",
                 "lr": 5e-3,
                 "weight_decay": 0,
-                "batch_size": 1024,
                 "weighted_CE": True,
                 "CE_weight": [1, 6],
                 "num_epochs": 200,
-                "patience": 40,
-                "batch_size": 1024,
+                "patience": 20,
+                "batch_size": 8192,
+                "add_time_stamp": True,
                 "add_egoID": True,
                 "add_port": True,
                 "add_time_delta": False,
+                "batch_norm": True,
+                "seed": 1,
+                "criterion": "f1",
+                "ibm_split": True
             },
             "register_info":{
                 "description": "GINe in IBM MultiGNN's paper.",
-                "batch_norm": True
+                "add_time_stamp": "will be overwritten",
+                "add_egoID": "will be overwritten",
+                "add_port": "will be overwritten",
+                "add_time_delta": "will be overwritten",
+                "batch_norm": "will be overwritten",
+                "ibm_split": "will be overwritten",
             },
-            "hidden_channels": 64,
+            "hidden_channels": 66,
             "num_layers": 2,
-            "num_neighbors": [-1, -1],
+            "num_neighbors": [100, 100],
             "edge_update": True,
             "dropout": 0.1,
-            "batch_norm": True,
+            "batch_norm": "will be overwritten",
         }
     }
 
@@ -382,7 +391,11 @@ class config:
     
     # Configuration of AMLworld dataset:
     AMLworld_config = {
+        "add_time_stamp": True,
         "add_egoID": True,
         "add_port": True,
         "add_time_delta": False,
+        "reverse_mp": False,
+        "ibm_split": True,
+        "force_reload": False,
     }

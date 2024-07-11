@@ -30,8 +30,8 @@ def get_pos_weight_for_BCEWithLogitsLoss(data):
 
 
 def get_weight_for_CrossEntropyLoss(data, config):
-    weight = config["hyperparameters"].get("CE_weight", None)
-    if weight == None:
+    weight = config["hyperparameters"].get("CE_weight", "auto")
+    if weight == "auto":
         # TODO: get weights for graph batching
         y = data.y.numpy()
         weight = compute_class_weight(

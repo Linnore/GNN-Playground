@@ -6,8 +6,9 @@ import torch
 import numpy as np
 import pandas as pd
 
-from typing import Union
 from datetime import datetime
+from loguru import logger
+from typing import Union
 from tqdm import tqdm
 from torch_geometric.data import InMemoryDataset, Data, HeteroData
 from torch_geometric.typing import OptTensor
@@ -162,7 +163,7 @@ def z_norm(data):
 
 class AMLworld(InMemoryDataset):
 
-    def __init__(self, root, opt="HI-Small", load_ports=True, load_time_delta=False, transform=None, pre_transform=None, pre_fileter=None, force_download=False, verbose=True, *args, **kwargs):
+    def __init__(self, root, opt="HI-Small", split="train", load_time_stamp=True, load_ports=True, load_time_delta=False, transform=None, pre_transform=None, pre_fileter=None, force_download=False, verbose=True, ibm_split=False, *args, **kwargs):
         """
         Args:
             opt (str, optional): _description_. Defaults to "HI-Small".
@@ -171,6 +172,7 @@ class AMLworld(InMemoryDataset):
         self.force_download = force_download
         self.verbose = verbose
         self.processed_in_this_call = False
+        self.ibm_split = ibm_split
 
         all_options = ["HI-Small", "HI-Medium", "HI-Large",
                        "LI-Small", "LI-Medium", "LI-Large"]
@@ -183,11 +185,16 @@ class AMLworld(InMemoryDataset):
 
         super().__init__(root, transform, pre_transform, pre_fileter, *args, **kwargs)
 
-        self.load(self.processed_paths[0])
+        # self.load(self.processed_file_paths_by_split[split])
+        self.data = torch.load(self.processed_file_paths_by_split[split])
+
 
         # Select features based on attribute options
         feature_cols = []
         exclude_feature_name = []
+        # TODO: Add 24-h time; One hot encoding for Payment Method
+        if not load_time_stamp:
+            exclude_feature_name.append("Timestamp")
         if not load_ports:
             exclude_feature_name.extend(["In-Port", "Out-Port"])
         if not load_time_delta:
@@ -204,10 +211,12 @@ class AMLworld(InMemoryDataset):
         self._data.edge_features_colID = feature_newID
 
         if not self.processed_in_this_call and self.verbose:
-            from loguru import logger
             logger.info(self._data.information)
             edge_features = list(feature_newID.keys())
             logger.info(f'Edge features being used: {edge_features}')
+            
+        self.num_nodes = self._data.num_nodes
+        self.num_edges = self._data.num_edges
 
     @property
     def raw_file_names(self):
@@ -232,8 +241,29 @@ class AMLworld(InMemoryDataset):
         return opt_files
 
     @property
+    def processed_file_names_by_split(self):
+        file_dict = {
+                "train": f"{self.opt}-train.pt",
+                "val": f"{self.opt}-val.pt",
+                "test": f"{self.opt}-test.pt"
+            }
+        if self.ibm_split:
+            for split, file in file_dict.items():
+                file_name = os.path.splitext(file)
+                file_dict[split] = f"{file_name}-ibm_split.pt"
+        return file_dict
+
+    @property
     def processed_file_names(self):
-        return [self.opt + "-processed_data.pt"]
+        return list(self.processed_file_names_by_split.values())
+    
+    
+    @property 
+    def processed_file_paths_by_split(self):
+        file_paths_dict = {}
+        for split, file_name in self.processed_file_names_by_split.items():
+            file_paths_dict[split] = os.path.join(self.processed_dir, file_name)
+        return file_paths_dict
 
     def download(self):
         try:
@@ -251,8 +281,6 @@ class AMLworld(InMemoryDataset):
         self.processed_in_this_call = True
         infor_str_list = []
 
-        if self.verbose:
-            from loguru import logger
 
         ################################################################
         # Step 1. Convert raw files from Kaggle to a formatted datatable. Adopt codes from "https://github.com/IBM/Multi-GNN/blob/main/format_kaggle_files.py"
@@ -423,25 +451,32 @@ class AMLworld(InMemoryDataset):
         te_inds = torch.cat(split_inds[2])
 
         infor_str_list.append(f"Total train samples: {tr_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-                              f"{y[tr_inds].float().mean() * 100 :.2f}% || Train days: {split[0][:5]}")
+                              f"{y[tr_inds].float().mean() * 100 :.2f}% || Train days: {split[0]}")
         infor_str_list.append(f"Total val samples: {val_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-                              f"{y[val_inds].float().mean() * 100:.2f}% || Val days: {split[1][:5]}")
+                              f"{y[val_inds].float().mean() * 100:.2f}% || Val days: {split[1]}")
         infor_str_list.append(f"Total test samples: {te_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-                              f"{y[te_inds].float().mean() * 100:.2f}% || Test days: {split[2][:5]}")
+                              f"{y[te_inds].float().mean() * 100:.2f}% || Test days: {split[2]}")
         if self.verbose:
             logger.info(f"Total train samples: {tr_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-                        f"{y[tr_inds].float().mean() * 100 :.2f}% || Train days: {split[0][:5]}")
+                        f"{y[tr_inds].float().mean() * 100 :.2f}% || Train days: {split[0]}")
             logger.info(f"Total val samples: {val_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-                        f"{y[val_inds].float().mean() * 100:.2f}% || Val days: {split[1][:5]}")
+                        f"{y[val_inds].float().mean() * 100:.2f}% || Val days: {split[1]}")
             logger.info(f"Total test samples: {te_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-                        f"{y[te_inds].float().mean() * 100:.2f}% || Test days: {split[2][:5]}")
+                        f"{y[te_inds].float().mean() * 100:.2f}% || Test days: {split[2]}")
 
         # Creating the final data objects
         tr_x, val_x, te_x = x, x, x
         e_tr = tr_inds.numpy()
-        # e_val = np.concatenate([tr_inds, val_inds])
-        e_val = val_inds.numpy()
-        e_te = te_inds.numpy()
+        if self.ibm_split:
+            e_val = np.concatenate([tr_inds, val_inds])
+            e_te = np.arange(edge_attr.shape[0])
+            try:
+                logger.warning("Following IBM's repo, all edges are considered in test set. ")
+            except:
+                print("Warning: Following IBM's repo, all edges are considered in test set.")
+        else:
+            e_val = val_inds.numpy()
+            e_te = te_inds.numpy()
 
         tr_edge_index = edge_index[:, e_tr]
         tr_edge_attr = edge_attr[e_tr]
@@ -503,19 +538,19 @@ class AMLworld(InMemoryDataset):
         for id, feature in enumerate(edge_features):
             edge_features_colID[feature] = id
 
-        # infor_str_list.append(
-        #     f'Edge features being used: {edge_features}')
         infor_str_list.append(
             f'Node features being used: {node_features} ("Feature" is a placeholder feature of all 1s)')
         if self.verbose:
-            #     logger.info(f'Edge features being used: {edge_features}')
             logger.info(
                 f'Node features being used: {node_features} ("Feature" is a placeholder feature of all 1s)')
+
+        # Normalize node attribute
+        tr_data.x = val_data.x = te_data.x = z_norm(tr_data.x)
 
         # Normalize the edge attribute
         norm_col = []
         for feature, id in edge_features_colID.items():
-            if feature != "Payment Format":
+            if feature not in ["Payment Format"]:
                 norm_col.append(id)
 
         tr_data.edge_attr[:, norm_col] = z_norm(tr_data.edge_attr[:, norm_col])
@@ -523,34 +558,10 @@ class AMLworld(InMemoryDataset):
             val_data.edge_attr[:, norm_col])
         te_data.edge_attr[:, norm_col] = z_norm(te_data.edge_attr[:, norm_col])
 
-        tmp_edge_attr = torch.zeros(
-            (edge_attr.shape[0], tr_data.edge_attr.shape[-1]))
-        tmp_edge_attr[e_tr] = tr_data.edge_attr
-        tmp_edge_attr[e_val] = val_data.edge_attr
-        tmp_edge_attr[e_te] = te_data.edge_attr
-
-        train_mask = torch.zeros(edge_index.shape[1], dtype=bool)
-        train_mask[e_tr] = True
-        val_mask = torch.zeros(edge_index.shape[1], dtype=bool)
-        val_mask[e_val] = True
-        test_mask = torch.zeros(edge_index.shape[1], dtype=bool)
-        test_mask[e_te] = True
-
-        data = GraphData(
-            x=x,
-            edge_index=edge_index,
-            edge_attr=tmp_edge_attr,
-            y=y,
-            train_mask=train_mask,
-            val_mask=val_mask,
-            test_mask=test_mask,
-            timestamps=timestamps,
-        )
-
-        data.edge_features_colID = edge_features_colID
-        data.information = "\n".join(infor_str_list)
-
-        data_list = [data]
+        information = "\n".join(infor_str_list)
+        for data_split in [tr_data, val_data, te_data]:
+            data_split.information = information
+            data_split.edge_features_colID = edge_features_colID
 
         if self.pre_filter is not None:
             data_list = [data for data in data_list if self.pre_filter(data)]
@@ -558,7 +569,10 @@ class AMLworld(InMemoryDataset):
         if self.pre_transform is not None:
             data_list = [self.pre_transform(data) for data in data_list]
 
-        self.save(data_list, self.processed_paths[0])
+        file_dict = self.processed_file_paths_by_split
+        torch.save(tr_data, file_dict["train"])
+        torch.save(val_data, file_dict["val"])
+        torch.save(te_data, file_dict["test"])
 
         # TODO: Process pattern tag into data object
         raw_pattern_file = os.path.join(self.raw_dir, self.opt+"_Patterns.txt")
