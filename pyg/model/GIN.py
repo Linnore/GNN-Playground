@@ -27,6 +27,7 @@ class GIN_Custom(torch.nn.Module):
                  dropout: float = 0.6,
                  jk=None,
                  skip_connection: bool = False,
+                 reverse_mp: bool = False,
                  config={},
                  *args,
                  **kwargs,
@@ -38,65 +39,101 @@ class GIN_Custom(torch.nn.Module):
             self.Conv = GINEConv
         else:
             self.Conv = GINConv
-
+            
         self.in_channels = in_channels
         self.hidden_channels = hidden_channels
         self.out_channels = out_channels
         self.num_layers = num_layers
+        self.num_MLP_layers = num_MLP_layers
         self.dropout = dropout
+        self.jk = jk
+        self.skip_connection = skip_connection
 
-        if type(hidden_channels) == int:
-            hidden_channels = [hidden_channels] * (num_layers-1)
+        self.init_layers()
+        
+        self.reverse_mp = reverse_mp
+        if self.reverse_mp:
+            self.init_layers_reverse_mp()
 
+    def init_layers(self):
+        if type(self.hidden_channels) == int:
+            self.hidden_channels = [self.hidden_channels] * (self.num_layers-1)
+            
         self.convs = ModuleList()
         self.convs.append(
             self.Conv(nn=self.init_MLP_for_GIN(
-                in_channels,
-                hidden_channels[0],
-                num_MLP_layers
+                self.in_channels,
+                self.hidden_channels[0],
+                self.num_MLP_layers
             ))
         )
-        for i in range(1, num_layers-1):
+        for i in range(1, self.num_layers-1):
             self.convs.append(
                 self.Conv(self.init_MLP_for_GIN(
-                    hidden_channels[i-1],
-                    hidden_channels[i],
-                    num_MLP_layers
+                    self.hidden_channels[i-1],
+                    self.hidden_channels[i],
+                    self.num_MLP_layers
                 ))
             )
         self.convs.append(self.Conv(self.init_MLP_for_GIN(
-            hidden_channels[-1],
-            out_channels,
-            num_MLP_layers
+            self.hidden_channels[-1],
+            self.out_channels,
+            self.num_MLP_layers
         )))
 
-        self.jk_mode = jk
+        self.jk_mode = self.jk
         if not self.jk_mode in ["cat", None]:
             raise NotImplementedError(NotImplementedError(
                 "JK mode not implemented. Only support concat JK for now!"))
         if self.jk_mode != None:
-            self.jk = JumpingKnowledge(jk)
-            jk_in_channels = out_channels
-            for i in range(len(hidden_channels)):
-                jk_in_channels += hidden_channels[i]
-            self.jk_linear = Linear(jk_in_channels, out_channels)
+            self.jk = JumpingKnowledge(self.jk)
+            jk_in_channels = self.out_channels
+            for i in range(len(self.hidden_channels)):
+                jk_in_channels += self.hidden_channels[i]
+            self.jk_linear = Linear(jk_in_channels, self.out_channels)
 
-        self.skip_connection = skip_connection
+        self.skip_connection = self.skip_connection
         if self.skip_connection:
             self.skip_proj = ModuleList()
             self.skip_proj.append(
-                self.get_skip_proj(in_channels, hidden_channels[0])
+                self.get_skip_proj(self.in_channels, self.hidden_channels[0])
             )
-            for i in range(1, num_layers-1):
+            for i in range(1, self.num_layers-1):
                 self.skip_proj.append(
                     self.get_skip_proj(
-                        hidden_channels[i-1],
-                        hidden_channels[i]
+                        self.hidden_channels[i-1],
+                        self.hidden_channels[i]
                     )
                 )
             self.skip_proj.append(
-                self.get_skip_proj(hidden_channels[-1], out_channels)
+                self.get_skip_proj(self.hidden_channels[-1], self.out_channels)
             )
+
+    def init_layers_reverse_mp(self):
+        if type(self.hidden_channels) == int:
+            self.hidden_channels = [self.hidden_channels] * (self.num_layers-1)
+            
+        self.rev_convs = ModuleList()
+        self.rev_convs.append(
+            self.Conv(nn=self.init_MLP_for_GIN(
+                self.in_channels,
+                self.hidden_channels[0],
+                self.num_MLP_layers
+            ))
+        )
+        for i in range(1, self.num_layers-1):
+            self.rev_convs.append(
+                self.Conv(self.init_MLP_for_GIN(
+                    self.hidden_channels[i-1],
+                    self.hidden_channels[i],
+                    self.num_MLP_layers
+                ))
+            )
+        self.rev_convs.append(self.Conv(self.init_MLP_for_GIN(
+            self.hidden_channels[-1],
+            self.out_channels,
+            self.num_MLP_layers
+        )))
 
     def init_MLP_for_GIN(self, in_channels: int, out_channels: int, num_MLP_layers):
         channel_list = [in_channels]
@@ -121,14 +158,22 @@ class GIN_Custom(torch.nn.Module):
                 if isinstance(nn, Linear):
                     nn.reset_parameters()
 
-    def forward(self, x, edge_index):
+    def forward(self, x, edge_index, **kwargs):
+        rev_edge_index = kwargs.pop("rev_edge_index", False)
+        assert len(kwargs) == 0, "Unexpected arguments!"
+        if rev_edge_index:
+            raise NotImplementedError
+        else:
+            self.forward_default(x, edge_index)
+
+    def forward_default(self, x, edge_index):
         xs = []
         for i in range(self.num_layers):
             x = F.dropout(x, p=self.dropout, training=self.training)
             if self.skip_connection:
                 residual = self.skip_proj[i](x)
-            x = self.convs[i](x, edge_index)
-            x = x + residual if self.skip_connection else x
+            conv_out = self.convs[i](x, edge_index)
+            x = conv_out + residual if self.skip_connection else conv_out
             x = F.elu(x)
             if self.jk_mode != None:
                 xs.append(x)
@@ -142,44 +187,39 @@ class GIN_Custom(torch.nn.Module):
 class GINe(GIN_Custom):
     # Adjusted model architecture from https://github.com/IBM/Multi-GNN/blob/252b0252afca109d1d216c411c59ff70753b25fc/models.py#L7
     def __init__(self,
-                 in_channels: int,
-                 hidden_channels: int,
-                 out_channels: int,
                  edge_update: bool = False,
                  edge_dim=None,
                  batch_norm=True,
                  *args,
                  **kwargs
                  ):
+        
+        self.batch_norm = batch_norm
+        self.edge_update = edge_update
+        self.edge_dim = edge_dim
+        
         super().__init__(
-            in_channels=hidden_channels,
-            hidden_channels=hidden_channels,
-            out_channels=hidden_channels,
-            GINE=True,
             *args,
+            GINE=True,
             **kwargs,
         )
 
-        self.batch_norm = batch_norm
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.edge_update = edge_update
-
+    def init_layers(self):
         self.node_emb = Linear(self.in_channels, self.hidden_channels)
-        self.edge_emb = Linear(edge_dim, self.hidden_channels)
+        self.edge_emb = Linear(self.edge_dim, self.hidden_channels)
 
         self.convs = ModuleList()
         self.emlps = ModuleList()
         self.batch_norms = ModuleList()
         for _ in range(self.num_layers):
             conv = self.Conv(
-                nn=self.init_MLP_for_GIN(hidden_channels, hidden_channels, 2),
+                nn=self.init_MLP_for_GIN(self.hidden_channels, self.hidden_channels, 2),
                 edge_dim=self.hidden_channels
             )
             if self.edge_update:
                 self.emlps.append(
                     Sequential(
-                        Linear(3 * self.hidden_channels, self.hidden_channels), 
+                        Linear(3 * self.hidden_channels, self.hidden_channels),
                         ReLU(),
                         Linear(self.hidden_channels, self.hidden_channels)
                     )
@@ -197,7 +237,49 @@ class GINe(GIN_Custom):
             Dropout(self.dropout),
             Linear(25, self.out_channels)
         )
+        
+        self.jk_mode = self.jk
+        if not self.jk_mode in ["cat", None]:
+            raise NotImplementedError(NotImplementedError(
+                "JK mode not implemented. Only support concat JK for now!"))
+        if self.jk_mode != None:
+            self.jk = JumpingKnowledge(self.jk)
+            jk_in_channels = self.hidden_channels * (self.num_layers + 1)
+            self.jk_linear = Linear(jk_in_channels, self.out_channels)
 
+        self.skip_connection = self.skip_connection
+        if self.skip_connection:
+            self.skip_proj = ModuleList()
+            for i in range(1, self.num_layers):
+                self.skip_proj.append(
+                    self.get_skip_proj(
+                        self.hidden_channels,
+                        self.hidden_channels
+                    )
+                )
+
+
+    def init_layers_reverse_mp(self):
+        self.rev_edge_emb = Linear(self.edge_dim, self.hidden_channels)
+
+        self.rev_convs = ModuleList()
+        self.rev_emlps = ModuleList()
+        for _ in range(self.num_layers):
+            conv = self.Conv(
+                nn=self.init_MLP_for_GIN(self.hidden_channels, self.hidden_channels, 2),
+                edge_dim=self.hidden_channels
+            )
+            if self.edge_update:
+                self.rev_emlps.append(
+                    Sequential(
+                        Linear(3 * self.hidden_channels, self.hidden_channels),
+                        ReLU(),
+                        Linear(self.hidden_channels, self.hidden_channels)
+                    )
+                )
+            self.rev_convs.append(conv)
+            
+            
     def reset_parameters(self):
         for conv in self.convs:
             conv.reset_parameters()
@@ -218,20 +300,37 @@ class GINe(GIN_Custom):
         for layer in self.batch_norms:
             layer.reset_parameters()
 
-    def forward(self, x, edge_index, edge_attr):
-        src, dst = edge_index
+    def forward(self, x, edge_index, edge_attr, **kwargs):
+        rev_edge_index = kwargs.pop("rev_edge_index", None)
+        rev_edge_attr = kwargs.pop("rev_edge_attr", None)
+        assert len(kwargs) == 0, "Unexpected arguments!"
+        if rev_edge_index is None:
+            return self.forward_default(x, edge_index, edge_attr)
+        else:
+            return self.forward_with_reverse_mp(x, edge_index, edge_attr, rev_edge_index, rev_edge_attr)
 
+    def forward_with_reverse_mp(self, x, edge_index, edge_attr, rev_edge_index, rev_edge_attr):
+        src, dst = edge_index
+        
         x = self.node_emb(x)
         edge_attr = self.edge_emb(edge_attr)
-
-        xs = []
+        rev_edge_attr = self.rev_edge_emb(rev_edge_attr)
+        
+        xs = [x]
         for i in range(self.num_layers):
-            # x = F.dropout(x, p=self.dropout, training=self.training) Need full neighborhood information to capture local structural pattern
             if self.skip_connection:
-                residual = self.skip_proj[i](x)
-            x = self.convs[i](x, edge_index, edge_attr)
+                residual = Identity(x)
+            # non-reverse
+            fx = self.convs[i](x, edge_index, edge_attr)
+            
+            # reverse
+            rx = self.rev_convs[i](x, rev_edge_index, rev_edge_attr)
+            
+            # Mix
+            mix = (fx + rx) / 2 # TODO: Try different mixture method
+            
+            x = mix + residual if self.skip_connection else mix
             x = self.batch_norms[i](x) if self.batch_norm else x
-            x = x + residual if self.skip_connection else x
             x = F.relu(x)
             if self.jk_mode != None:
                 xs.append(x)
@@ -239,10 +338,46 @@ class GINe(GIN_Custom):
             if self.edge_update:
                 if self.skip_connection:
                     residual = self.skip_proj[i](edge_attr)
-                edge_attr = self.emlps[i](
+                emlp_out = self.emlps[i](
                     torch.cat([x[src], x[dst], edge_attr], -1))
-                edge_attr = edge_attr + residual if self.skip_connection else edge_attr
+                edge_attr = emlp_out + residual if self.skip_connection else emlp_out
+        
 
+        if self.jk_mode != None:
+            x = self.jk_linear(self.jk(xs))
+            
+        # Dont know whether the relu is useful or not
+        out = torch.cat([x[src].relu(), x[dst].relu(), edge_attr], -1)
+        out = self.mlp(out)
+        return out
+
+    def forward_default(self, x, edge_index, edge_attr):
+        src, dst = edge_index
+
+        x = self.node_emb(x)
+        edge_attr = self.edge_emb(edge_attr)
+
+        xs = [x]
+        for i in range(self.num_layers):
+            # x = F.dropout(x, p=self.dropout, training=self.training) Need full neighborhood information to capture local structural pattern
+            if self.skip_connection:
+                residual = self.skip_proj[i](x)
+            conv_out = self.convs[i](x, edge_index, edge_attr)
+            x = conv_out + residual if self.skip_connection else conv_out
+            x = self.batch_norms[i](x) if self.batch_norm else x
+            x = F.relu(x)
+            if self.jk_mode != None:
+                xs.append(x)
+
+            if self.edge_update:
+                if self.skip_connection:
+                    residual = self.skip_proj[i](edge_attr)
+                emlp_out = self.emlps[i](
+                    torch.cat([x[src], x[dst], edge_attr], -1))
+                edge_attr = emlp_out + residual if self.skip_connection else emlp_out
+        if self.jk_mode != None:
+            x = self.jk_linear(self.jk(xs))
+            
         # Dont know whether the relu is useful or not
         out = torch.cat([x[src].relu(), x[dst].relu(), edge_attr], -1)
         out = self.mlp(out)

@@ -126,14 +126,22 @@ class PNA_Custom(torch.nn.Module):
                 if isinstance(nn, Linear):
                     nn.reset_parameters()
 
-    def forward(self, x, edge_index):
+    def forward(self, x, edge_index, **kwargs):
+        rev_edge_index = kwargs.pop("rev_edge_index", False)
+        assert len(kwargs) == 0, "Unexpected arguments!"
+        if rev_edge_index:
+            raise NotImplementedError
+        else:
+            self.forward_default(x, edge_index)
+
+    def forward_default(self, x, edge_index):
         xs = []
         for i in range(self.num_layers):
             x = F.dropout(x, p=self.dropout, training=self.training)
             if self.skip_connection:
                 residual = self.skip_proj[i](x)
-            x = self.convs[i](x, edge_index)
-            x = x + residual if self.skip_connection else x
+            conv_out = self.convs[i](x, edge_index)
+            x = conv_out + residual if self.skip_connection else conv_out
             x = F.elu(x)
             if self.jk_mode != None:
                 xs.append(x)
@@ -231,7 +239,19 @@ class PNAe(PNA_Custom):
         for layer in self.batch_norms:
             layer.reset_parameters()
 
-    def forward(self, x, edge_index, edge_attr):
+    def forward(self, x, edge_index, edge_attr, **kwargs):
+        rev_edge_index = kwargs.pop("rev_edge_index", None)
+        rev_edge_attr = kwargs.pop("rev_edge_attr", None)
+        assert len(kwargs) == 0, "Unexpected arguments!"
+        if rev_edge_index is None:
+            return self.forward_default(x, edge_index, edge_attr)
+        else:
+            return self.forward_with_reverse_mp(x, edge_index, edge_attr, rev_edge_index, rev_edge_attr)
+
+    def forward_with_reverse_mp(self, x, edge_index, edge_attr, rev_edge_index, rev_edge_attr):
+        pass
+
+    def forward_default(self, x, edge_index, edge_attr):
         src, dst = edge_index
 
         x = self.node_emb(x)
@@ -242,9 +262,9 @@ class PNAe(PNA_Custom):
             # x = F.dropout(x, p=self.dropout, training=self.training) Need full neighborhood information to capture local structural pattern
             if self.skip_connection:
                 residual = self.skip_proj[i](x)
-            x = self.convs[i](x, edge_index, edge_attr)
+            conv_out = self.convs[i](x, edge_index)
+            x = conv_out + residual if self.skip_connection else conv_out
             x = self.batch_norms[i](x) if self.batch_norm else x
-            x = x + residual if self.skip_connection else x
             x = F.relu(x)
             if self.jk_mode != None:
                 xs.append(x)
@@ -252,9 +272,9 @@ class PNAe(PNA_Custom):
             if self.edge_update:
                 if self.skip_connection:
                     residual = self.skip_proj[i](edge_attr)
-                edge_attr = self.emlps[i](
+                emlp_out = self.emlps[i](
                     torch.cat([x[src], x[dst], edge_attr], -1))
-                edge_attr = edge_attr + residual if self.skip_connection else edge_attr
+                edge_attr = emlp_out + residual if self.skip_connection else emlp_out
 
         # Dont know whether the relu is useful or not
         out = torch.cat([x[src].relu(), x[dst].relu(), edge_attr], -1)

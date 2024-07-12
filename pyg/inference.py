@@ -28,28 +28,27 @@ def node_classification_inference(model, loader, split, enable_tqdm, sampling_st
         elif sampling_strategy == "GraphBatching":
             mask = torch.ones(batch.x.shape[0], dtype=bool)
             raise NotImplementedError
-            
-        
+
         outputs = model(batch.x.to(device), batch.edge_index.to(device))[mask]
-        
+
         if multilabel:
             preds = outputs > threshold
         else:
             preds = outputs.argmax(dim=-1)
-        
+
         n_ids.append(batch_n_ids)
         predictions.append(preds)
-        
+
     # Metrics
     n_ids = torch.cat(n_ids, dim=0).detach().numpy()
     predictions = torch.cat(predictions, dim=0).detach().cpu().numpy()
-    
+
     idx = np.argsort(n_ids)
     n_ids = n_ids[idx]
     predictions = predictions[idx]
-    
+
     return n_ids, predictions
-    
+
 
 def overwrite_model_config(model, config):
     config.update(model.config)
@@ -88,21 +87,21 @@ def infer_gnn(config):
         enable_tqdm=vargs["tqdm"],
         sampling_strategy=general_config["sampling_strategy"],
         device=general_config["device"],
-        multilabel= True if dataset_config["task_type"].startswith("multi") else False
-        )
+        multilabel=True if dataset_config["task_type"].startswith(
+            "multi") else False
+    )
 
-    
     # Save predictions
     pred_path = os.path.join(
         vargs["output_dir"],
         f"{config['model']}-v{version}-{config['dataset']}",
         f"{vargs['split']}-pred"
     )+".csv"
-    
+
     save_dir = os.path.split(pred_path)[0]
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-        
+
     n = n_ids.shape[0]
     content = np.hstack((n_ids.reshape(n, -1), predictions.reshape(n, -1)))
     pred_df = pd.DataFrame(content)
@@ -112,17 +111,14 @@ def infer_gnn(config):
             col_names.append(f"pred_{i+1}")
     else:
         col_names.append("pred")
-        
+
     pred_df.columns = col_names
     pred_df.to_csv(pred_path, index=False)
-    
+
     truth_path = os.path.join(save_dir, f"{vargs['split']}-truth.csv")
-    
-    content = np.hstack((n_ids.reshape(n, -1), data.y.numpy()[n_ids].reshape(n, -1)))
+
+    content = np.hstack(
+        (n_ids.reshape(n, -1), data.y.numpy()[n_ids].reshape(n, -1)))
     truth_df = pd.DataFrame(content)
     truth_df.columns = col_names
     truth_df.to_csv(truth_path, index=False)
-    
-    
-        
-        

@@ -9,13 +9,18 @@ from sklearn.metrics import f1_score
 from sklearn.utils.class_weight import compute_class_weight
 
 
-def get_sample_input(loader, task_type, device):
+def get_sample_input(loader, task_type, reverse_mp, device):
     sample_input = {}
     sample_batch = next(iter(loader))
     sample_input["x"] = sample_batch.x.to(device)
     sample_input["edge_index"] = sample_batch.edge_index.to(device)
+    if reverse_mp:
+        sample_input["rev_edge_index"] = sample_input["edge_index"].flip(0)
     if task_type.endswith("EC"):
         sample_input["edge_attr"] = sample_batch.edge_attr
+        if reverse_mp:
+            sample_input["rev_edge_attr"] = sample_batch.rev_edge_attr
+    
     return sample_input
 
 
@@ -73,7 +78,7 @@ def get_loss_fn(config, loader, reduction="mean"):
         return torch.nn.CrossEntropyLoss(weight=weight, reduction=reduction)
 
 
-def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0):
+def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0, reverse_mp=False):
     total_loss = 0
     total_num = 0
     predictions = []
@@ -91,7 +96,13 @@ def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer
             mask = None
 
         targets = batch.y  # on cpu
-        outputs = model(batch.x.to(device), batch.edge_index.to(device))
+        x = batch.x.to(device)
+        edge_index = batch.edge_index.to(device)
+        outputs = model(
+            x,
+            edge_index,
+            rev_edge_index=edge_index.flip(0) if reverse_mp else None
+        )
 
         if mask is not None:
             targets = targets[mask]
@@ -129,13 +140,13 @@ def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer
     return avg_loss, f1, predictions, truths
 
 
-def edge_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0):
+def edge_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0, reverse_mp=False):
 
     total_loss = 0
     total_num = 0
     predictions = []
     truths = []
-    has_edge_attr = 'edge_attr' in loader.data.edge_attrs()
+    has_edge_attr = hasattr(loader.data, "edge_attr")
     bar = tqdm(loader, total=len(loader), disable=not enable_tqdm)
     for batch in bar:
         if mode == "train":
@@ -147,8 +158,16 @@ def edge_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer
             mask = eval(f"batch.{mode}_mask")
 
         targets = batch.y  # on cpu
-        outputs = model(batch.x.to(device), batch.edge_index.to(
-            device), batch.edge_attr if has_edge_attr else None)
+        x = batch.x.to(device)
+        edge_index = batch.edge_index.to(device)
+        outputs = model(
+            x,
+            edge_index,
+            batch.edge_attr.to(device) if has_edge_attr else None,
+            rev_edge_index=edge_index.flip(0) if reverse_mp else None,
+            rev_edge_attr=batch.rev_edge_attr.to(
+                device) if has_edge_attr and reverse_mp else None,
+        )
 
         if mask is not None:
             targets = targets[mask]

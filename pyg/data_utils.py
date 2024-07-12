@@ -158,6 +158,34 @@ def get_data_SAGE(config):
     else:
         raise NotImplementedError("Unsupported task type!")
 
+    if config["model_config"]["reverse_mp"]:
+        if train_data.is_undirected():
+            raise ValueError("Reverse message passing should not be applied on undirected graph.")
+        for data in [train_data, val_data, test_data]:
+            if not hasattr(data, "rev_edge_attr"):
+                if hasattr(data, "edge_attr"):
+                    if hasattr(data, "edge_features_colID"):
+                        rev_edge_features_colID = {}
+                        edge_features_colID = data.edge_features_colID
+                        for feature, id in edge_features_colID.items():
+                            if feature.startswith("In-"):
+                                rev_edge_features_colID[feature] = edge_features_colID[f"Out-{feature[3:]}"]
+                            elif feature.startswith("Out-"):
+                                rev_edge_features_colID[feature] = edge_features_colID[f"In-{feature[4:]}"]
+                            else:
+                                rev_edge_features_colID[feature] = id
+                        
+                        data.rev_edge_features_colID = rev_edge_features_colID
+                        
+                        rev_ID = []
+                        for feature, id in sorted(rev_edge_features_colID.items(), key=lambda x: x[1]):
+                            rev_ID.append(edge_features_colID[feature])
+                        data.rev_edge_attr = data.edge_attr[:, rev_ID]
+                                
+                    else:
+                        data.rev_edge_attr = data.edge_attr
+        logger.info("Reverse edges added.")
+
     return train_data, val_data, test_data, batch_transform
 
 

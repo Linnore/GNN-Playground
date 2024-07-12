@@ -67,7 +67,7 @@ def add_train_parser(subparsers: argparse._SubParsersAction, parent_parser: argp
     model_params.add_argument('--v2', action=argparse.BooleanOptionalAction, default=None)
     model_params.add_argument('--edge_update', action=argparse.BooleanOptionalAction, default=None)
     model_params.add_argument('--batch_norm', action=argparse.BooleanOptionalAction, default=None)
-    
+    model_params.add_argument('--reverse_mp', action=argparse.BooleanOptionalAction, default=None)
     
     
     # AMLworld configuration
@@ -76,7 +76,6 @@ def add_train_parser(subparsers: argparse._SubParsersAction, parent_parser: argp
     AMLworld_config.add_argument('--add_egoID', action=argparse.BooleanOptionalAction, default=None)
     AMLworld_config.add_argument('--add_port', action=argparse.BooleanOptionalAction, default=None)
     AMLworld_config.add_argument('--add_time_delta', action=argparse.BooleanOptionalAction, default=None)
-    AMLworld_config.add_argument('--reverse_mp', action=argparse.BooleanOptionalAction, default=None)
     AMLworld_config.add_argument('--ibm_split', action=argparse.BooleanOptionalAction, default=None)
     AMLworld_config.add_argument('--force_reload', action=argparse.BooleanOptionalAction, default=None)
     
@@ -138,6 +137,11 @@ def add_evaluate_parser(subparsers: argparse._SubParsersAction, parent_parser: a
     general_config.add_argument('--seed', type=int, default=None)
     general_config.add_argument('--device', default=None)
     general_config.add_argument('--tqdm', action=argparse.BooleanOptionalAction, default=None)
+    
+    # AMLworld configuration. Allow evaluate on a different splitting setting to the training one
+    AMLworld_config = parser.add_argument_group("Arguments for AMLworld.")
+    AMLworld_config.add_argument('--ibm_split', action=argparse.BooleanOptionalAction, default=None)
+    AMLworld_config.add_argument('--force_reload', action=argparse.BooleanOptionalAction, default=None)
     
 
 def create_parser(config: config):

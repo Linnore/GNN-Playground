@@ -249,7 +249,7 @@ class AMLworld(InMemoryDataset):
             }
         if self.ibm_split:
             for split, file in file_dict.items():
-                file_name = os.path.splitext(file)
+                file_name = os.path.splitext(file)[0]
                 file_dict[split] = f"{file_name}-ibm_split.pt"
         return file_dict
 

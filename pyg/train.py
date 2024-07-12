@@ -66,7 +66,7 @@ def train_gnn(config):
         os.makedirs(os.path.dirname(save_path))
 
     # Summary logging
-    sample_input = get_sample_input(train_loader, dataset_config["task_type"], device)
+    sample_input = get_sample_input(train_loader, dataset_config["task_type"], model_config.get("reverse_mp", False), device)
     summary_str = summary(model, **sample_input)
     logger.info("Model Summary:\n" + summary_str)
     with open("logs/tmp/model_summary.txt", "w") as out_file:

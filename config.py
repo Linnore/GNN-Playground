@@ -22,7 +22,7 @@ class config:
     }
 
     general_config = {
-        "framework": "transductive", # Must be transductive or inductive
+        "framework": "transductive",  # Must be transductive or inductive
 
         "sampling_strategy": "None",  # Must be choosen from sampling_strategy options
 
@@ -46,12 +46,12 @@ class config:
     # Hyperparameters
     hyperparameters = {
         # batch_size to infinity if memory allowed
-        "batch_size": 512, 
+        "batch_size": 512,
         "lr": 5e-3,
-        "weight_decay": 0.0005, # L2 regularization,
-        "weighted_CE": False, # Only useful for single-label task.
+        "weight_decay": 0.0005,  # L2 regularization,
+        "weighted_CE": False,  # Only useful for single-label task.
         "CE_weight": [1, 6],
-        "weighted_BCE": False, # Only useful for multi-label task.
+        "weighted_BCE": False,  # Only useful for multi-label task.
     }
 
     """Options for difference experiment settings
@@ -79,8 +79,8 @@ class config:
     sampling_strategy_options = [
         "SAGE",  # use the inductive learning proposed by GraphSAGE
         "SAINT",  # use the inductive learning proposed by GraphSAINT
-        "GraphBatching", # use for inductive learning with full graph
-        "None", # only useful when GCN-like behaviors are desired.
+        "GraphBatching",  # use for inductive learning with full graph
+        "None",  # only useful when GCN-like behaviors are desired.
     ]
     SAGE_inductive_options = [
         "default",
@@ -89,21 +89,21 @@ class config:
     ]
 
     # Model collections. Create the configuration of each model here.
-    model_collections = {        
-        "GraphSAGE-benchmark-trans":{
+    model_collections = {
+        "GraphSAGE-benchmark-trans": {
             "base_model": "GraphSAGE_PyG",
             "overwrite": {
                 "framework": "transductive",
                 "sampling_strategy": "SAGE",
-                "lr" : 5e-3,
+                "lr": 5e-3,
                 "weight_decay": 5e-4,
             },
             # Registeration inforamtion for MLflow
-            "register_info":{
+            "register_info": {
                 "description": "Benchmark GraphSAGE.",
                 "tags": {
-                    "aggr":"mean", 
-                    }, 
+                    "aggr": "mean",
+                },
             },
             "num_layers": 2,
             "num_neighbors": [25, 10],
@@ -112,22 +112,22 @@ class config:
             "aggr": "mean",
         },
 
-        # Transductive benchmark GAT of Planetoid; 
+        # Transductive benchmark GAT of Planetoid;
         # For PubMed: output_heads=8, lr=0.01, weight_decay=0.001
         "GAT-benchmark-trans": {
             "base_model": "GAT_Custom",
             "overwrite": {
                 "framework": "transductive",
                 "sampling_strategy": "None",
-                "lr" : 5e-3,
+                "lr": 5e-3,
                 "weight_decay": 5e-4,
             },
             # Registeration inforamtion for MLflow
-            "register_info":{
+            "register_info": {
                 "description": "Benchmark model from GAT paper.",
                 "tags": {
-                    "v2": False, # Change to v2 if v2 is True
-                    }, 
+                    "v2": False,  # Change to v2 if v2 is True
+                },
             },
             "hidden_channels_per_head": 32,
             "num_layers": 2,
@@ -137,23 +137,23 @@ class config:
             "jk": None,
             "v2": False,
         },
-        
-        # Inductive benchmark GAT of PPI; 
+
+        # Inductive benchmark GAT of PPI;
         "GAT-benchmark-in": {
             "base_model": "GAT_Custom",
             "overwrite": {
                 "framework": "inductive",
                 "sampling_strategy": "GraphBatching",
                 "batch_size": 2,
-                "lr" : 5e-3,
+                "lr": 5e-3,
                 "weight_decay": 0,
             },
             # Registeration inforamtion for MLflow
-            "register_info":{
+            "register_info": {
                 "description": "Benchmark model from GAT paper.",
                 "tags": {
-                    "v2": False, # Change to v2 if v2 is True
-                    }, 
+                    "v2": False,  # Change to v2 if v2 is True
+                },
             },
             "num_layers": 3,
             "heads": [4, 4],
@@ -164,8 +164,8 @@ class config:
             "v2": False,
             "skip_connection": True,
         },
-        
-        
+
+
         # # Equivalent to GAT with equal attention + jk.
         # # TODO: Customizable GraphSAGE with skip-connection
         # "GAT-Equal-benchmark-in":{
@@ -183,22 +183,22 @@ class config:
         #     "aggr": "mean",
         #     "jk": "cat"
         # },
-                
+
         # Current GIN implementation has low acc for the node-level task.
         "GIN-benchmark-trans": {
             "base_model": "GIN_Custom",
             "overwrite": {
                 "framework": "transductive",
                 "sampling_strategy": "None",
-                "lr" : 5e-3,
+                "lr": 5e-3,
                 "weight_decay": 5e-4,
             },
             # Registeration inforamtion for MLflow
-            "register_info":{
+            "register_info": {
                 "description": "Benchmark GIN model.",
                 "tags": {
-                    "GINE": False, # True if use GINEConv
-                    }, 
+                    "GINE": False,  # True if use GINEConv
+                },
             },
             "hidden_channels": 64,
             "num_layers": 2,
@@ -207,61 +207,61 @@ class config:
             "GINE": False,
             "skip_connection": False,
         },
-        
-        "GIN-PyG-trans":{
+
+        "GIN-PyG-trans": {
             "base_model": "GIN_PyG",
             "overwrite": {
                 "framework": "transductive",
                 "sampling_strategy": "None",
-                "lr" : 1e-2,
+                "lr": 1e-2,
                 "weight_decay": 5e-4,
             },
             # Registeration inforamtion for MLflow
-            "register_info":{
+            "register_info": {
                 "description": "Benchmark GIN model.",
                 "tags": {
-                    "GINE": False, # True if use GINEConv
-                    }, 
+                    "GINE": False,  # True if use GINEConv
+                },
             },
             "hidden_channels": 8,
             "num_layers": 2,
             "num_MLP_layers": 2,
             "dropout": 0,
         },
-        
-        "PNA-PyG-trans":{
+
+        "PNA-PyG-trans": {
             "base_model": "PNA_PyG",
             "overwrite": {
                 "framework": "transductive",
                 "sampling_strategy": "None",
-                "lr" : 5e-4,
+                "lr": 5e-4,
                 "weight_decay": 1e-3,
             },
             # Registeration inforamtion for MLflow
-            "register_info":{
+            "register_info": {
                 "description": "Benchmark PNA model.",
                 "tags": {
-                    }, 
+                },
             },
             "hidden_channels": 64,
             "num_layers": 2,
             "dropout": 0.7,
             "jk": "cat"
         },
-        
-        "PNA-benchmark-trans":{
+
+        "PNA-benchmark-trans": {
             "base_model": "PNA_Custom",
             "overwrite": {
                 "framework": "transductive",
                 "sampling_strategy": "SAGE",
-                "lr" : 5e-4,
+                "lr": 5e-4,
                 "weight_decay": 1e-3,
             },
             # Registeration inforamtion for MLflow
-            "register_info":{
+            "register_info": {
                 "description": "Benchmark PNA model.",
                 "tags": {
-                    }, 
+                },
             },
             "hidden_channels": 64,
             "num_layers": 2,
@@ -269,10 +269,10 @@ class config:
             "dropout": 0.6,
             # "jk": "cat"
         },
-        
-        "GINe-in":{
+
+        "GINe-in": {
             "base_model": "GINe",
-            "overwrite":{
+            "overwrite": {
                 "framework": "inductive",
                 "sampling_strategy": "SAGE",
                 "lr": 5e-3,
@@ -291,9 +291,9 @@ class config:
                 "criterion": "f1",
                 "ibm_split": True
             },
-            "register_info":{
+            "register_info": {
                 "description": "GINe in IBM MultiGNN's paper.",
-                "tags":{
+                "tags": {
                     "add_time_stamp": "will be overwritten",
                     "add_egoID": "will be overwritten",
                     "add_port": "will be overwritten",
@@ -308,11 +308,13 @@ class config:
             "edge_update": True,
             "dropout": 0.1,
             "batch_norm": "will be overwritten",
+            "reverse_mp": False,
+            "batch_norm": True,
         }
     }
 
     # Dataset collections
-    # Task type: 
+    # Task type:
     #  - "single-label-NC" : single label node classification
     #  - "multi-label-NC" : multi-label node classification
     dataset_collections = {
@@ -361,43 +363,42 @@ class config:
             "num_node_features": 50,
             "num_classes": 121
         },
-        
+
         # node_feature includes: a dummy 1, and EgoID
-        "AMLworld-HI-Small":{
+        "AMLworld-HI-Small": {
             "task_type": "single-label-EC",
             "num_classes": 2
         },
-        "AMLworld-HI-Medium":{
+        "AMLworld-HI-Medium": {
             "task_type": "single-label-EC",
             "num_classes": 2
         },
-        "AMLworld-HI-Large":{
+        "AMLworld-HI-Large": {
             "task_type": "single-label-EC",
             "num_classes": 2
         },
-        "AMLworld-LI-Small":{
+        "AMLworld-LI-Small": {
             "task_type": "single-label-EC",
             "num_classes": 2
         },
-        "AMLworld-LI-Medium":{
+        "AMLworld-LI-Medium": {
             "task_type": "single-label-EC",
             "num_classes": 2
         },
-        "AMLworld-LI-Large":{
+        "AMLworld-LI-Large": {
             "task_type": "single-label-EC",
             "num_classes": 2
         },
-        
+
 
     }
-    
+
     # Configuration of AMLworld dataset:
     AMLworld_config = {
         "add_time_stamp": True,
         "add_egoID": True,
         "add_port": True,
         "add_time_delta": False,
-        "reverse_mp": False,
         "ibm_split": True,
         "force_reload": False,
     }
