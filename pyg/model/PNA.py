@@ -127,12 +127,15 @@ class PNA_Custom(torch.nn.Module):
                     nn.reset_parameters()
 
     def forward(self, x, edge_index, **kwargs):
-        rev_edge_index = kwargs.pop("rev_edge_index", False)
+        rev_edge_index = kwargs.pop("rev_edge_index", None)
         assert len(kwargs) == 0, "Unexpected arguments!"
-        if rev_edge_index:
-            raise NotImplementedError
+        if rev_edge_index is None:
+            return self.forward_default(x, edge_index)
         else:
-            self.forward_default(x, edge_index)
+            return self.forward_with_reverse_mp(x, edge_index, rev_edge_index)
+
+    def forward_with_reverse_mp(self, x, edge_index, rev_edge_index):
+        pass
 
     def forward_default(self, x, edge_index):
         xs = []

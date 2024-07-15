@@ -158,7 +158,7 @@ def get_data_SAGE(config):
     else:
         raise NotImplementedError("Unsupported task type!")
 
-    if config["model_config"]["reverse_mp"]:
+    if config["model_config"].get("reverse_mp", False):
         if train_data.is_undirected():
             raise ValueError("Reverse message passing should not be applied on undirected graph.")
         for data in [train_data, val_data, test_data]:
