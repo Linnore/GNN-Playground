@@ -289,7 +289,7 @@ class config:
                 "batch_norm": True,
                 "seed": 1,
                 "criterion": "f1",
-                "ibm_split": True
+                "ibm_split": True,
             },
             "register_info": {
                 "description": "GINe in IBM MultiGNN's paper.",
@@ -310,6 +310,8 @@ class config:
             "batch_norm": "will be overwritten",
             "reverse_mp": False,
             "batch_norm": True,
+            "layer_mix": "None",
+            "model_mix": "Mean",
         }
     }
 

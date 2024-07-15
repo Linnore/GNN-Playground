@@ -66,7 +66,8 @@ def train_gnn(config):
         os.makedirs(os.path.dirname(save_path))
 
     # Summary logging
-    sample_input = get_sample_input(train_loader, dataset_config["task_type"], model_config.get("reverse_mp", False), device)
+    reverse_mp = model_config.get("reverse_mp", False)
+    sample_input = get_sample_input(train_loader, dataset_config["task_type"], reverse_mp, device)
     summary_str = summary(model, **sample_input)
     logger.info("Model Summary:\n" + summary_str)
     with open("logs/tmp/model_summary.txt", "w") as out_file:
@@ -97,7 +98,8 @@ def train_gnn(config):
         sampling_strategy=config["general_config"]["sampling_strategy"],
         enable_tqdm=general_config["tqdm"],
         device=device,
-        task_type=dataset_config["task_type"])
+        task_type=dataset_config["task_type"], 
+        reverse_mp=reverse_mp)
 
     best_epoch = 0
     for epoch in range(1, 1+general_config["num_epochs"]):

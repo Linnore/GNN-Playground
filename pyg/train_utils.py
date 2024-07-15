@@ -206,7 +206,7 @@ def edge_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer
     return avg_loss, f1, predictions, truths
 
 
-def get_run_step(model, loss_fn, optimizer, sampling_strategy, enable_tqdm, device, task_type):
+def get_run_step(model, loss_fn, optimizer, sampling_strategy, enable_tqdm, device, task_type, reverse_mp):
 
     if task_type == "single-label-NC":
         run_step = lambda *args, **kwargs: node_classification_step(
@@ -217,6 +217,7 @@ def get_run_step(model, loss_fn, optimizer, sampling_strategy, enable_tqdm, devi
             enable_tqdm=enable_tqdm,
             sampling_strategy=sampling_strategy,
             device=device,
+            reverse_mp=reverse_mp,
             **kwargs)
     elif task_type == "multi-label-NC":
         run_step = lambda *args, **kwargs: node_classification_step(
@@ -229,6 +230,7 @@ def get_run_step(model, loss_fn, optimizer, sampling_strategy, enable_tqdm, devi
             device=device,
             multilabel=True,
             threshold=0,
+            reverse_mp=reverse_mp,
             **kwargs)
     elif task_type == "single-label-EC":
         run_step = lambda *args, **kwargs: edge_classification_step(
@@ -239,6 +241,7 @@ def get_run_step(model, loss_fn, optimizer, sampling_strategy, enable_tqdm, devi
             enable_tqdm=enable_tqdm,
             sampling_strategy=sampling_strategy,
             device=device,
+            reverse_mp=reverse_mp,
             **kwargs
         )
     elif task_type == "single-label-EC":
@@ -252,6 +255,7 @@ def get_run_step(model, loss_fn, optimizer, sampling_strategy, enable_tqdm, devi
             device=device,
             multilabel=True,
             threshold=0,
+            reverse_mp=reverse_mp,
             **kwargs
         )
     else:

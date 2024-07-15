@@ -68,7 +68,8 @@ def add_train_parser(subparsers: argparse._SubParsersAction, parent_parser: argp
     model_params.add_argument('--edge_update', action=argparse.BooleanOptionalAction, default=None)
     model_params.add_argument('--batch_norm', action=argparse.BooleanOptionalAction, default=None)
     model_params.add_argument('--reverse_mp', action=argparse.BooleanOptionalAction, default=None)
-    
+    model_params.add_argument('--layer_mix', choices=["None", "Mean","Sum", "Max", "Cat"])
+    model_params.add_argument('--model_mix', choices=["Mean","Sum", "Max"])
     
     # AMLworld configuration
     AMLworld_config = parser.add_argument_group("Arguments for AMLworld.")
