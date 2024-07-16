@@ -130,7 +130,10 @@ class GAT_Custom(torch.nn.Module):
                 residual = self.skip_proj[i](x)
             conv_out = self.convs[i](x, edge_index)
             x = conv_out + residual if self.skip_connection else conv_out
-            x = F.elu(x)
+            
+            if i != self.num_layers-1:
+                x = F.elu(x)
+            
             if self.jk_mode != None:
                 xs.append(x)
 
@@ -242,16 +245,19 @@ class GATe(GAT_Custom):
             conv_out = self.convs[i](x, edge_index, edge_attr)
             x = conv_out + residual if self.skip_connection else conv_out
             x = self.batch_norms[i](x) if self.batch_norm else x
-            x = F.relu(x)
-            if self.jk_mode != None:
-                xs.append(x)
-
+            
+            if i != self.num_layers-1:
+                x = F.relu(x)
+                
             if self.edge_update:
                 if self.skip_connection:
                     residual = self.skip_proj[i](edge_attr)
                 emlp_out = self.emlps[i](
                     torch.cat([x[src], x[dst], edge_attr], -1))
                 edge_attr = emlp_out + residual if self.skip_connection else emlp_out
+                
+        if self.jk_mode != None:
+            x = self.jk_linear(self.jk(xs))
 
         # Dont know whether the relu is useful or not
         out = torch.cat([x[src].relu(), x[dst].relu(), edge_attr], -1)

@@ -344,6 +344,7 @@ def get_loader_graph_batch(train_dataset, val_dataset, test_dataset, transform, 
         batch_size=batch_size,
         num_workers=general_config["num_workers"],
         persistent_workers=general_config["persistent_workers"],
+        shuffle=True,
     )
     val_loader = DataLoader(
         val_dataset,
