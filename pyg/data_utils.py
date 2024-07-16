@@ -25,6 +25,7 @@ def get_data_SAGE(config):
     batch_transform = None
 
     dataset = config["dataset"]
+    task_type = config["dataset_config"]["task_type"]
     if dataset in ['Cora', 'CiteSeer', 'PubMed']:
         from torch_geometric.datasets import Planetoid
         dataset = Planetoid('dataset', dataset,
@@ -57,6 +58,14 @@ def get_data_SAGE(config):
         logger.info(f"AMLworld configuration: {pprint.pformat(AMLworld_config)}")
         dataset_config = config["dataset_config"]
 
+        if task_type.endswith("NC"):
+            readout = "node"
+        elif task_type.endswith("EC"):
+            readout = "edge"
+        else:
+            logger.warning("Unsupported task type. Will return data object with both node labels and edge labels!")
+            readout = "both"
+
         from pyg.custom_dataset.AMLworld import AMLworld
         option = dataset.partition("-")[-1]
         dataset = []
@@ -72,6 +81,7 @@ def get_data_SAGE(config):
                     ibm_split=AMLworld_config["ibm_split"],
                     force_reload=AMLworld_config["force_reload"],
                     verbose=False,
+                    readout=readout
                 )[0]
             )
             
@@ -87,7 +97,6 @@ def get_data_SAGE(config):
     general_config = config["general_config"]
 
     # Node Classification
-    task_type = config["dataset_config"]["task_type"]
     if task_type in ["single-label-NC", "multi-label-NC"]:
         # For dataset containing one graph and indicate split by mask
         if len(dataset) == 1:

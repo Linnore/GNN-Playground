@@ -368,35 +368,35 @@ class config:
 
         # node_feature includes: a dummy 1, and EgoID
         "AMLworld-HI-Small": {
-            "task_type": "single-label-EC",
-            "num_classes": 2
+            # configured by AMLworld_config
         },
+
         "AMLworld-HI-Medium": {
-            "task_type": "single-label-EC",
-            "num_classes": 2
+            # configured by AMLworld_config
         },
+        
         "AMLworld-HI-Large": {
-            "task_type": "single-label-EC",
-            "num_classes": 2
+            # configured by AMLworld_config
         },
+        
         "AMLworld-LI-Small": {
-            "task_type": "single-label-EC",
-            "num_classes": 2
+            # configured by AMLworld_config
         },
+        
         "AMLworld-LI-Medium": {
-            "task_type": "single-label-EC",
-            "num_classes": 2
+            # configured by AMLworld_config
         },
+        
         "AMLworld-LI-Large": {
-            "task_type": "single-label-EC",
-            "num_classes": 2
+            # configured by AMLworld_config
         },
-
-
     }
 
     # Configuration of AMLworld dataset:
+    # Supported task type: single-label-EC (default) and single-label-NC
     AMLworld_config = {
+        "task_type": "single-label-EC",
+        "num_classes": 2,
         "add_time_stamp": True,
         "add_egoID": True,
         "add_port": True,

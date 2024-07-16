@@ -105,7 +105,7 @@ export-experiment \
 
 ```
 
-Say the remote MLflow tracking URI is `http://127.0.0.1:8001` and it requires authentication, then run the following commands for submission:
+Say the remote MLflow tracking URI is `http://127.0.0.1:8081` and it requires authentication, then run the following commands for submission:
 ```bash
 
 export MLFLOW_TRACKING_URI=http://localhost:8081
@@ -225,15 +225,15 @@ Modify the settings of corresponding models in `config.py` to configure the mode
       - [x] Benchmark for Transductive Learning on Planetoid
       - [ ] Benchmark for Inductive Learning on SAINT paper datasets.
       - [x] Benchmark for Inductive Learning on PPI
-      - [ ] Edge update
+      - [x] Edge update
   - [-] PNA
     - [x] Benchmark on Planetoid.
-    - [ ] Edge Update
-    - [ ] Reverse Message Passing
+    - [x] Edge Update
+    - [x] Reverse Message Passing
   - [-] GIN
     - [x] Benchmark on Planetoid. 
     - [x] Edge Update
-    - [ ] Reverse Message Passing
+    - [x] Reverse Message Passing
 
   
 - [ ] Deep Graph Library: See branch dgl_playground

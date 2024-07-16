@@ -6,6 +6,7 @@ import torch
 import numpy as np
 import pandas as pd
 
+from typing import Literal
 from datetime import datetime
 from loguru import logger
 from typing import Union
@@ -163,7 +164,7 @@ def z_norm(data):
 
 class AMLworld(InMemoryDataset):
 
-    def __init__(self, root, opt="HI-Small", split="train", load_time_stamp=True, load_ports=True, load_time_delta=False, transform=None, pre_transform=None, pre_fileter=None, force_download=False, verbose=True, ibm_split=False, *args, **kwargs):
+    def __init__(self, root, opt="HI-Small", split="train", load_time_stamp=True, load_ports=True, load_time_delta=False, transform=None, pre_transform=None, pre_fileter=None, force_download=False, verbose=True, ibm_split=False, readout:Literal['edge', 'node', 'both'] = 'edge', *args, **kwargs):
         """
         Args:
             opt (str, optional): _description_. Defaults to "HI-Small".
@@ -214,7 +215,20 @@ class AMLworld(InMemoryDataset):
             logger.info(self._data.information)
             edge_features = list(feature_newID.keys())
             logger.info(f'Edge features being used: {edge_features}')
+            del self._data.information
             
+        # Select the labels to returen
+        self._data.readout = readout
+        if readout == "edge":
+            del self._data.x_label
+        elif readout == "node":
+            self._data.y = self._data.x_label
+            del self._data.x_label
+        elif readout == "both":
+            self._data.edge_label = self._data.y
+            del self._data.y
+            
+        # Add information to dataset object
         self.num_nodes = self._data.num_nodes
         self.num_edges = self._data.num_edges
 
@@ -489,6 +503,7 @@ class AMLworld(InMemoryDataset):
             edge_attr=tr_edge_attr,
             timestamps=tr_edge_times
         )
+        self.infer_licit_x(tr_data)
 
         val_edge_index = edge_index[:, e_val]
         val_edge_attr = edge_attr[e_val]
@@ -501,6 +516,7 @@ class AMLworld(InMemoryDataset):
             edge_attr=val_edge_attr,
             timestamps=val_edge_times
         )
+        self.infer_licit_x(val_data)
 
         # TODO: Check why te_inds is not used!
         te_edge_index = edge_index[:, e_te]
@@ -514,6 +530,7 @@ class AMLworld(InMemoryDataset):
             edge_attr=te_edge_attr,
             timestamps=te_edge_times
         )
+        self.infer_licit_x(te_data)
 
         # Adding ports and time-deltas
         if self.verbose:
@@ -577,6 +594,20 @@ class AMLworld(InMemoryDataset):
         # TODO: Process pattern tag into data object
         raw_pattern_file = os.path.join(self.raw_dir, self.opt+"_Patterns.txt")
 
+
+    def infer_licit_x(self, input_data: GraphData, in_place=True):
+        if in_place:
+            data = input_data
+        else:
+            data = input_data.clone()
+            
+        x1, x2 = data.edge_index[:, data.y.bool()]
+        data.x_label = torch.zeros(data.x.shape[0], dtype=int)
+        data.x_label[x1] = 1
+        data.x_label[x2] = 1
+        
+        if not in_place:
+            return data
 
 def main():
     dataset = AMLworld("./dataset/AMLworld")
