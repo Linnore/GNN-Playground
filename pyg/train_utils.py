@@ -15,7 +15,7 @@ def get_batch_input(batch, reverse_mp, device):
     input_dict["edge_index"] = batch.edge_index.to(device)
     if reverse_mp:
         input_dict["rev_edge_index"] = input_dict["edge_index"].flip(0)
-    if hasattr(batch, 'edge_attr') and batch.edge_attr:
+    if hasattr(batch, 'edge_attr') and batch.edge_attr is not None:
         input_dict["edge_attr"] = batch.edge_attr.to(device)
         if reverse_mp:
             input_dict["rev_edge_attr"] = batch.rev_edge_attr.to(device)
