@@ -63,8 +63,7 @@ def get_data_SAGE(config):
         elif task_type.endswith("EC"):
             readout = "edge"
         else:
-            logger.warning("Unsupported task type. Will return data object with both node labels and edge labels!")
-            readout = "both"
+            raise NotImplementedError
 
         from pyg.custom_dataset.AMLworld import AMLworld
         option = dataset.partition("-")[-1]
@@ -86,7 +85,12 @@ def get_data_SAGE(config):
             )
             
         if AMLworld_config["add_egoID"]:
-            from pyg.custom_dataset.AMLworld import AddEgoIds
+            if task_type.endswith("NC"):
+                from pyg.custom_dataset.AMLworld import AddEgoIds_for_NeighborLoader as AddEgoIds
+            elif task_type.endswith("EC"):
+                from pyg.custom_dataset.AMLworld import AddEgoIds_for_LinkNeighborLoader as AddEgoIds
+            else:
+                raise ValueError("Unsupported task type for add_egoID!")
             batch_transform = AddEgoIds()
         dataset_config["num_node_features"] = dataset[0].x.shape[1] + \
             int(AMLworld_config["add_egoID"])

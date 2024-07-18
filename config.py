@@ -40,7 +40,8 @@ class config:
         "num_epochs": 1000,
         "patience": 100,
         "num_workers": 2,
-        "persistent_workers": True
+        "persistent_workers": True,
+        "f1_average": "micro",
     }
 
     # Hyperparameters
@@ -288,8 +289,54 @@ class config:
                 "add_time_delta": False,
                 "batch_norm": True,
                 "seed": 1,
-                "criterion": "f1",
+                "criterion": "loss",
                 "ibm_split": True,
+                "f1_average": "binary"
+            },
+            "register_info": {
+                "description": "GINe in IBM MultiGNN's paper.",
+                "tags": {
+                    "add_time_stamp": "will be overwritten",
+                    "add_egoID": "will be overwritten",
+                    "add_port": "will be overwritten",
+                    "add_time_delta": "will be overwritten",
+                    "batch_norm": "will be overwritten",
+                    "ibm_split": "will be overwritten",
+                }
+            },
+            "hidden_channels": 66,
+            "num_layers": 2,
+            "num_neighbors": [100, 100],
+            "edge_update": True,
+            "dropout": 0.1,
+            "batch_norm": "will be overwritten",
+            "reverse_mp": False,
+            "batch_norm": True,
+            "layer_mix": "None",
+            "model_mix": "Mean",
+        },
+        
+        "GINe-in-NC": {
+            "base_model": "GINe",
+            "overwrite": {
+                "framework": "inductive",
+                "sampling_strategy": "SAGE",
+                "lr": 0.1,
+                "weight_decay": 0,
+                "weighted_CE": True,
+                "CE_weight": [1, 6],
+                "num_epochs": 200,
+                "patience": 20,
+                "batch_size": 8192,
+                "add_time_stamp": True,
+                "add_egoID": True,
+                "add_port": True,
+                "add_time_delta": False,
+                "batch_norm": True,
+                "seed": 118010142,
+                "criterion": "loss",
+                "ibm_split": True,
+                "f1_average": "binary"
             },
             "register_info": {
                 "description": "GINe in IBM MultiGNN's paper.",
@@ -319,6 +366,11 @@ class config:
     # Task type:
     #  - "single-label-NC" : single label node classification
     #  - "multi-label-NC" : multi-label node classification
+    task_type_options = [
+        "single-label-NC", 
+        "multi-label-NC",
+        "single-label-EC", 
+    ]
     dataset_collections = {
         "Cora": {
             "task_type": "single-label-NC",

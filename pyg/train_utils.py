@@ -9,19 +9,18 @@ from sklearn.metrics import f1_score
 from sklearn.utils.class_weight import compute_class_weight
 
 
-def get_sample_input(loader, task_type, reverse_mp, device):
-    sample_input = {}
-    sample_batch = next(iter(loader))
-    sample_input["x"] = sample_batch.x.to(device)
-    sample_input["edge_index"] = sample_batch.edge_index.to(device)
+def get_batch_input(batch, reverse_mp, device):
+    input_dict = {}
+    input_dict["x"] = batch.x.to(device)
+    input_dict["edge_index"] = batch.edge_index.to(device)
     if reverse_mp:
-        sample_input["rev_edge_index"] = sample_input["edge_index"].flip(0)
-    if task_type.endswith("EC"):
-        sample_input["edge_attr"] = sample_batch.edge_attr
+        input_dict["rev_edge_index"] = input_dict["edge_index"].flip(0)
+    if hasattr(batch, 'edge_attr'):
+        input_dict["edge_attr"] = batch.edge_attr.to(device)
         if reverse_mp:
-            sample_input["rev_edge_attr"] = sample_batch.rev_edge_attr
+            input_dict["rev_edge_attr"] = batch.rev_edge_attr.to(device)
     
-    return sample_input
+    return input_dict
 
 
 def get_pos_weight_for_BCEWithLogitsLoss(data):
@@ -78,7 +77,7 @@ def get_loss_fn(config, loader, reduction="mean"):
         return torch.nn.CrossEntropyLoss(weight=weight, reduction=reduction)
 
 
-def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0, reverse_mp=False):
+def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0, reverse_mp=False, f1_average="micro"):
     total_loss = 0
     total_num = 0
     predictions = []
@@ -96,13 +95,7 @@ def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer
             mask = None
 
         targets = batch.y  # on cpu
-        x = batch.x.to(device)
-        edge_index = batch.edge_index.to(device)
-        outputs = model(
-            x,
-            edge_index,
-            rev_edge_index=edge_index.flip(0) if reverse_mp else None
-        )
+        outputs = model(**get_batch_input(batch, reverse_mp, device))
 
         if mask is not None:
             targets = targets[mask]
@@ -134,19 +127,18 @@ def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer
     avg_loss = total_loss/total_num
     mlflow.log_metric(f"{mode} loss", avg_loss, epoch)
 
-    f1 = f1_score(truths, predictions, average="micro")
+    f1 = f1_score(truths, predictions, average=f1_average)
     mlflow.log_metric(f"{mode} F1", f1, epoch)
 
     return avg_loss, f1, predictions, truths
 
 
-def edge_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0, reverse_mp=False):
+def edge_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0, reverse_mp=False, f1_average="binary"):
 
     total_loss = 0
     total_num = 0
     predictions = []
     truths = []
-    has_edge_attr = hasattr(loader.data, "edge_attr")
     bar = tqdm(loader, total=len(loader), disable=not enable_tqdm)
     for batch in bar:
         if mode == "train":
@@ -156,18 +148,11 @@ def edge_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer
             mask = torch.isin(batch.e_id, batch.input_id)
         elif sampling_strategy in [None, "None"]:
             mask = eval(f"batch.{mode}_mask")
+        elif sampling_strategy == "GraphBatching":
+            mask = None
 
         targets = batch.y  # on cpu
-        x = batch.x.to(device)
-        edge_index = batch.edge_index.to(device)
-        outputs = model(
-            x,
-            edge_index,
-            batch.edge_attr.to(device) if has_edge_attr else None,
-            rev_edge_index=edge_index.flip(0) if reverse_mp else None,
-            rev_edge_attr=batch.rev_edge_attr.to(
-                device) if has_edge_attr and reverse_mp else None,
-        )
+        outputs = model(**get_batch_input(batch, reverse_mp, device))
 
         if mask is not None:
             targets = targets[mask]
@@ -200,13 +185,13 @@ def edge_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer
     mlflow.log_metric(f"{mode} loss", avg_loss, epoch)
 
     # Note that 1 is the minority class
-    f1 = f1_score(truths, predictions)
+    f1 = f1_score(truths, predictions, average=f1_average)
     mlflow.log_metric(f"{mode} F1", f1, epoch)
 
     return avg_loss, f1, predictions, truths
 
 
-def get_run_step(model, loss_fn, optimizer, sampling_strategy, enable_tqdm, device, task_type, reverse_mp):
+def get_run_step(model, loss_fn, optimizer, sampling_strategy, enable_tqdm, device, task_type, reverse_mp, f1_average):
 
     if task_type == "single-label-NC":
         run_step = lambda *args, **kwargs: node_classification_step(
@@ -218,6 +203,7 @@ def get_run_step(model, loss_fn, optimizer, sampling_strategy, enable_tqdm, devi
             sampling_strategy=sampling_strategy,
             device=device,
             reverse_mp=reverse_mp,
+            f1_average=f1_average,
             **kwargs)
     elif task_type == "multi-label-NC":
         run_step = lambda *args, **kwargs: node_classification_step(
@@ -231,6 +217,7 @@ def get_run_step(model, loss_fn, optimizer, sampling_strategy, enable_tqdm, devi
             multilabel=True,
             threshold=0,
             reverse_mp=reverse_mp,
+            f1_average=f1_average,
             **kwargs)
     elif task_type == "single-label-EC":
         run_step = lambda *args, **kwargs: edge_classification_step(
@@ -242,6 +229,7 @@ def get_run_step(model, loss_fn, optimizer, sampling_strategy, enable_tqdm, devi
             sampling_strategy=sampling_strategy,
             device=device,
             reverse_mp=reverse_mp,
+            f1_average=f1_average,
             **kwargs
         )
     elif task_type == "single-label-EC":
@@ -256,6 +244,7 @@ def get_run_step(model, loss_fn, optimizer, sampling_strategy, enable_tqdm, devi
             multilabel=True,
             threshold=0,
             reverse_mp=reverse_mp,
+            f1_average=f1_average,
             **kwargs
         )
     else:

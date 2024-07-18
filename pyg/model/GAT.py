@@ -172,6 +172,7 @@ class GATe(GAT_Custom):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.edge_update = edge_update
+        self.readout = kwargs.get('readout', None)
 
         self.node_emb = Linear(self.in_channels, self.hidden_channels)
         self.edge_emb = Linear(edge_dim, self.hidden_channels)
@@ -201,8 +202,13 @@ class GATe(GAT_Custom):
             if self.batch_norm:
                 self.batch_norms.append(BatchNorm(self.hidden_channels))
 
+        if self.readout == "edge":
+            readout_in_channels = self.hidden_channels*3
+        elif self.readout == "node":
+            readout_in_channels = self.hidden_channels
+            
         self.mlp = Sequential(
-            Linear(self.hidden_channels*3, 50),
+            Linear(readout_in_channels, 50),
             ReLU(),
             Dropout(self.dropout),
             Linear(50, 25),
@@ -259,10 +265,14 @@ class GATe(GAT_Custom):
         if self.jk_mode != None:
             x = self.jk_linear(self.jk(xs))
 
+        if self.readout == "edge":
         # Dont know whether the relu is useful or not
-        out = torch.cat([x[src].relu(), x[dst].relu(), edge_attr], -1)
-        out = self.mlp(out)
-        return out
+            out = torch.cat([x[src].relu(), x[dst].relu(), edge_attr], -1)
+            out = self.mlp(out)
+            return out
+        elif self.readout == "node":
+            out = self.mlp(x)
+            return out
 
         # Original (slow):
         # x = x[edge_index.T].reshape(-1, 2 * self.hidden_channels).relu()

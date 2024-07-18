@@ -20,6 +20,15 @@ def filter_config_for_archive(config):
     return archive_config
 
 
+def get_readout(task_type):
+    if task_type.endswith("NC"):
+        return "node"
+    elif task_type.endswith("EC"):
+        return "edge"
+    else:
+        raise NotImplementedError
+
+
 def get_model(config, train_loader):
     archive_config = filter_config_for_archive(config)
 
@@ -27,6 +36,7 @@ def get_model(config, train_loader):
     model_config.pop("num_neighbors", -1)
 
     dataset_config = config["dataset_config"]
+    model_config["readout"] = get_readout(dataset_config["task_type"])
 
     match model_config.pop("base_model"):
         case "GraphSAGE_PyG":
@@ -50,18 +60,17 @@ def get_model(config, train_loader):
                 **model_config,
             )
         case "GAT_Custom":
-            model = GAT_Custom(
-                in_channels=dataset_config["num_node_features"],
-                out_channels=dataset_config["num_classes"],
-                hidden_channels_per_head=model_config.pop(
-                    "hidden_channels_per_head"),
-                num_layers=model_config.pop("num_layers"),
-                heads=model_config.pop("heads", 8),
-                output_heads=model_config.pop("output_heads", 1),
-                v2=model_config.pop("v2", False),
-                config=archive_config,
-                **model_config
-            )
+            model = GAT_Custom(in_channels=dataset_config["num_node_features"],
+                               out_channels=dataset_config["num_classes"],
+                               hidden_channels_per_head=model_config.pop(
+                                   "hidden_channels_per_head"),
+                               num_layers=model_config.pop("num_layers"),
+                               heads=model_config.pop("heads", 8),
+                               output_heads=model_config.pop(
+                                   "output_heads", 1),
+                               v2=model_config.pop("v2", False),
+                               config=archive_config,
+                               **model_config)
         case "GIN_PyG":
             model = GIN_PyG(
                 in_channels=dataset_config["num_node_features"],
@@ -69,8 +78,7 @@ def get_model(config, train_loader):
                 hidden_channels=model_config.pop("hidden_channels"),
                 num_layers=model_config.pop("num_layers"),
                 config=archive_config,
-                **model_config
-            )
+                **model_config)
         case "GIN_Custom":
             model = GIN_Custom(
                 in_channels=dataset_config["num_node_features"],
@@ -79,8 +87,7 @@ def get_model(config, train_loader):
                 num_layers=model_config.pop("num_layers"),
                 GINE=model_config.pop("GINE", False),
                 config=archive_config,
-                **model_config
-            )
+                **model_config)
 
         case "PNA_PyG":
             deg = PNAConv.get_degree_histogram(train_loader)
@@ -91,8 +98,7 @@ def get_model(config, train_loader):
                 num_layers=model_config.pop("num_layers"),
                 deg=deg,
                 config=archive_config,
-                **model_config
-            )
+                **model_config)
         case "PNA_Custom":
             deg = PNAConv.get_degree_histogram(train_loader)
             model = PNA_Custom(
@@ -102,21 +108,18 @@ def get_model(config, train_loader):
                 num_layers=model_config.pop("num_layers"),
                 deg=deg,
                 config=archive_config,
-                **model_config
-            )
+                **model_config)
         case "GINe":
-            
-            model = GINe(
-                in_channels=dataset_config["num_node_features"],
-                out_channels=dataset_config["num_classes"],
-                hidden_channels=model_config.pop("hidden_channels"),
-                edge_dim=dataset_config["num_edge_features"],
-                num_layers=model_config.pop("num_layers"),
-                edge_update=model_config.pop("edge_update", False),
-                batch_norm=model_config.pop("batch_norm", True),
-                config=archive_config,
-                **model_config
-            )
+
+            model = GINe(in_channels=dataset_config["num_node_features"],
+                         out_channels=dataset_config["num_classes"],
+                         hidden_channels=model_config.pop("hidden_channels"),
+                         edge_dim=dataset_config["num_edge_features"],
+                         num_layers=model_config.pop("num_layers"),
+                         edge_update=model_config.pop("edge_update", False),
+                         batch_norm=model_config.pop("batch_norm", True),
+                         config=archive_config,
+                         **model_config)
         case _:
             raise NotImplementedError(
                 f"Unreconized base model: {model_config['base_model']}")

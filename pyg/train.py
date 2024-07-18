@@ -8,7 +8,7 @@ import numpy as np
 
 from .data_utils import get_loader
 from .model.model_hub import get_model
-from .train_utils import get_loss_fn, get_run_step, get_sample_input
+from .train_utils import get_loss_fn, get_run_step, get_batch_input
 
 from loguru import logger
 from torch_geometric.nn import summary
@@ -67,7 +67,7 @@ def train_gnn(config):
 
     # Summary logging
     reverse_mp = model_config.get("reverse_mp", False)
-    sample_input = get_sample_input(train_loader, dataset_config["task_type"], reverse_mp, device)
+    sample_input = get_batch_input(next(iter(train_loader)), reverse_mp, device)
     summary_str = summary(model, **sample_input)
     logger.info("Model Summary:\n" + summary_str)
     with open("logs/tmp/model_summary.txt", "w") as out_file:
@@ -99,7 +99,8 @@ def train_gnn(config):
         enable_tqdm=general_config["tqdm"],
         device=device,
         task_type=dataset_config["task_type"], 
-        reverse_mp=reverse_mp)
+        reverse_mp=reverse_mp,
+        f1_average=general_config["f1_average"])
 
     best_epoch = 0
     for epoch in range(1, 1+general_config["num_epochs"]):
@@ -116,7 +117,7 @@ def train_gnn(config):
             val_loss, val_f1, _, _ = run_step("val", epoch, val_loader)
 
             # Test
-            _, test_f1, truths, predictions = run_step(
+            _, test_f1, predictions, truths = run_step(
                 "test", epoch, test_loader)
 
         logger.info(

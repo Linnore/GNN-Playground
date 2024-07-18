@@ -1,8 +1,8 @@
 import torch
 import os
 
-
 from .data_utils import get_loader
+from .train_utils import get_batch_input
 
 from mlflow import MlflowClient
 from mlflow.pytorch import load_model as load_pyt_model
@@ -12,6 +12,7 @@ from tqdm import tqdm
 from sklearn.metrics import classification_report
 
 OVERWRITE_MESSAGE_SET = set()
+
 
 def overwrite_config(config, key, value):
     global OVERWRITE_MESSAGE_SET
@@ -27,25 +28,25 @@ def overwrite_config(config, key, value):
 
 def update_config(config: dict, vargs: dict):
     config["mode"] = vargs["mode"]
-    config["model"] = vargs["model"] 
+    config["model"] = vargs["model"]
     config["dataset"] = vargs["dataset"]
 
     if config["mode"] == "train":
-        model_overwrite_config = config["model_collections"][config["model"]].pop(
-            "overwrite", {})
+        model_overwrite_config = config["model_collections"][
+            config["model"]].pop("overwrite", {})
         config = overwrite_config_from_vargs(config, model_overwrite_config)
 
-
     config = overwrite_config_from_vargs(config, vargs)
-    
+
     if config["mode"] == "train":
         config["model_config"] = config["model_collections"][config["model"]]
-        
+
     config["dataset_config"] = config["dataset_collections"][config["dataset"]]
-    
+
     config["vargs"] = vargs
-    
+
     return config
+
 
 def overwrite_config_from_vargs(config: dict, vargs: dict):
     for key, value in config.items():
@@ -56,7 +57,38 @@ def overwrite_config_from_vargs(config: dict, vargs: dict):
     return config
 
 
-def eval_node_classification(split, model, loader, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0):
+def unpack_nested_dict(my_dict: dict, new_dict: dict):
+    for key, value in my_dict.items():
+        if isinstance(value, dict):
+            unpack_nested_dict(value, new_dict)
+        else:
+            new_dict[key] = value
+
+
+def overwrite_model_config(model, config):
+    config.update(model.config)
+
+    unpacked_model_config = {}
+    unpack_nested_dict(model.config, unpacked_model_config)
+    overwrite_config_from_vargs(config, unpacked_model_config)
+
+    vargs = config.pop("vargs", {})
+    config["mode"] = vargs["mode"]
+    config["model"] = vargs["model"]
+    config["dataset"] = vargs["dataset"]
+    config = overwrite_config_from_vargs(config, vargs)
+    config["vargs"] = vargs
+
+
+def eval_node_classification(split,
+                             model,
+                             loader,
+                             enable_tqdm,
+                             sampling_strategy,
+                             device="cpu",
+                             multilabel=False,
+                             threshold=0,
+                             reverse_mp=False):
     predictions = []
     truths = []
     bar = tqdm(loader, total=len(loader), disable=not enable_tqdm)
@@ -70,7 +102,7 @@ def eval_node_classification(split, model, loader, enable_tqdm, sampling_strateg
             mask = None
 
         targets = batch.y  # on cpu
-        outputs = model(batch.x.to(device), batch.edge_index.to(device))
+        outputs = model(**get_batch_input(batch, reverse_mp, device))
 
         if mask is not None:
             targets = targets[mask]
@@ -88,12 +120,18 @@ def eval_node_classification(split, model, loader, enable_tqdm, sampling_strateg
     predictions = torch.cat(predictions, dim=0).detach().cpu().numpy()
     truths = torch.cat(truths, dim=0).detach().numpy()
 
-    return classification_report(
-        truths, predictions, zero_division=0
-    )
+    return classification_report(truths, predictions, zero_division=0)
 
 
-def eval_edge_classification(split, model, loader, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0):
+def eval_edge_classification(split,
+                             model,
+                             loader,
+                             enable_tqdm,
+                             sampling_strategy,
+                             device="cpu",
+                             multilabel=False,
+                             threshold=0,
+                             reverse_mp=False):
     predictions = []
     truths = []
     has_edge_attr = 'edge_attr' in loader.data.edge_attrs()
@@ -105,8 +143,7 @@ def eval_edge_classification(split, model, loader, enable_tqdm, sampling_strateg
             mask = eval(f"batch.{split}_mask")
 
         targets = batch.y  # on cpu
-        outputs = model(batch.x.to(device), batch.edge_index.to(
-            device), batch.edge_attr if has_edge_attr else None)
+        outputs = model(**get_batch_input(batch, reverse_mp, device))
 
         if mask is not None:
             targets = targets[mask]
@@ -124,15 +161,7 @@ def eval_edge_classification(split, model, loader, enable_tqdm, sampling_strateg
     predictions = torch.cat(predictions, dim=0).detach().cpu().numpy()
     truths = torch.cat(truths, dim=0).detach().numpy()
 
-    return classification_report(
-        truths, predictions, zero_division=0
-    )
-
-
-def overwrite_model_config(model, config):
-    vargs = config.pop("vargs", {})
-    config.update(model.config)
-    update_config(config, vargs)
+    return classification_report(truths, predictions, zero_division=0)
 
 
 def eval_gnn(config):
@@ -148,10 +177,8 @@ def eval_gnn(config):
     if not os.path.exists(dst_path):
         os.makedirs(dst_path)
     logger.info(f"Model is saved at {dst_path}")
-    model = load_pyt_model(
-        model_uri=f'models:/{model_name}/{version}',
-        dst_path=dst_path
-    )
+    model = load_pyt_model(model_uri=f'models:/{model_name}/{version}',
+                           dst_path=dst_path)
 
     # Need to overwrite the model configs from the loaded model
     overwrite_model_config(model, config)
@@ -167,7 +194,8 @@ def eval_gnn(config):
         eval_step = eval_edge_classification
 
     reports = {}
-    for split, loader in zip(["train", "val", "test"], [train_loader, val_loader, test_loader]):
+    for split, loader in zip(["train", "val", "test"],
+                             [train_loader, val_loader, test_loader]):
         reports[split] = eval_step(
             split,
             model,
@@ -175,8 +203,8 @@ def eval_gnn(config):
             enable_tqdm=general_config["tqdm"],
             sampling_strategy=general_config["sampling_strategy"],
             device=general_config["device"],
-            multilabel=True if task_type.startswith("multi") else False
-        )
+            multilabel=True if task_type.startswith("multi") else False,
+            reverse_mp=config["model_config"].get("reverse_mp", False))
 
     # Save report
     info_message = [""]
@@ -186,8 +214,8 @@ def eval_gnn(config):
     info_message = "\n".join(info_message)
     logger.info(info_message)
 
-    report_path = os.path.join(
-        dst_path, f"Evalution_report_{config['dataset']}.txt")
+    report_path = os.path.join(dst_path,
+                               f"Evalution_report_{config['dataset']}.txt")
     logger.info(f"Evaluation reports are saved at {report_path}")
     with open(report_path, "w") as out_file:
         out_file.write(info_message)

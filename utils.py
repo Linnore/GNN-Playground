@@ -92,6 +92,8 @@ def add_train_parser(subparsers: argparse._SubParsersAction, parent_parser: argp
         '--ibm_split', action=argparse.BooleanOptionalAction, default=None)
     AMLworld_config.add_argument(
         '--force_reload', action=argparse.BooleanOptionalAction, default=None)
+    AMLworld_config.add_argument(
+        '--task_type', choices=config.task_type_options, default=None)
 
 
 def add_inference_parser(subparsers: argparse._SubParsersAction, parent_parser: argparse.ArgumentParser, config: config):

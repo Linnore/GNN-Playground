@@ -130,7 +130,7 @@ class GraphData(Data):
 
 
 # Codes adopted from https://github.com/IBM/Multi-GNN/blob/main/train_util.py
-class AddEgoIds(BaseTransform):
+class AddEgoIds_for_LinkNeighborLoader(BaseTransform):
     r"""Add IDs to the centre nodes of the batch.
     """
 
@@ -155,6 +155,21 @@ class AddEgoIds(BaseTransform):
         return data
 
 
+class AddEgoIds_for_NeighborLoader(BaseTransform):
+    r"""Add IDs to the centre nodes of the batch.
+    """
+
+    def __init__(self):
+        pass
+
+    def __call__(self, data: Data):
+        x = data.x 
+        device = x.device
+        ids = torch.zeros((x.shape[0], 1), device=device)
+        ids[:data.batch_size] = 1
+        data.x = torch.cat([x, ids], dim=1)
+        return data
+
 def z_norm(data):
     std = data.std(0)
     std = torch.where(std == 0, torch.tensor(
@@ -164,7 +179,7 @@ def z_norm(data):
 
 class AMLworld(InMemoryDataset):
 
-    def __init__(self, root, opt="HI-Small", split="train", load_time_stamp=True, load_ports=True, load_time_delta=False, transform=None, pre_transform=None, pre_fileter=None, force_download=False, verbose=True, ibm_split=False, readout:Literal['edge', 'node', 'both'] = 'edge', *args, **kwargs):
+    def __init__(self, root, opt="HI-Small", split="train", load_time_stamp=True, load_ports=True, load_time_delta=False, transform=None, pre_transform=None, pre_fileter=None, force_download=False, verbose=True, ibm_split=False, readout:Literal['edge', 'node'] = 'edge', *args, **kwargs):
         """
         Args:
             opt (str, optional): _description_. Defaults to "HI-Small".
@@ -224,9 +239,6 @@ class AMLworld(InMemoryDataset):
         elif readout == "node":
             self._data.y = self._data.x_label
             del self._data.x_label
-        elif readout == "both":
-            self._data.edge_label = self._data.y
-            del self._data.y
             
         # Add information to dataset object
         self.num_nodes = self._data.num_nodes
@@ -503,6 +515,8 @@ class AMLworld(InMemoryDataset):
             edge_attr=tr_edge_attr,
             timestamps=tr_edge_times
         )
+        tr_nodes = torch.unique(tr_edge_index.view(-1))
+        tr_data = tr_data.subgraph(tr_nodes)
         self.infer_licit_x(tr_data)
 
         val_edge_index = edge_index[:, e_val]
@@ -516,6 +530,8 @@ class AMLworld(InMemoryDataset):
             edge_attr=val_edge_attr,
             timestamps=val_edge_times
         )
+        val_nodes = torch.unique(val_edge_index.view(-1))
+        val_data = val_data.subgraph(val_nodes)
         self.infer_licit_x(val_data)
 
         # TODO: Check why te_inds is not used!
@@ -530,6 +546,8 @@ class AMLworld(InMemoryDataset):
             edge_attr=te_edge_attr,
             timestamps=te_edge_times
         )
+        te_nodes = torch.unique(te_edge_index.view(-1))
+        te_data = te_data.subgraph(te_nodes)
         self.infer_licit_x(te_data)
 
         # Adding ports and time-deltas
@@ -562,7 +580,9 @@ class AMLworld(InMemoryDataset):
                 f'Node features being used: {node_features} ("Feature" is a placeholder feature of all 1s)')
 
         # Normalize node attribute
-        tr_data.x = val_data.x = te_data.x = z_norm(tr_data.x)
+        tr_data.x = z_norm(tr_data.x)
+        val_data.x = z_norm(val_data.x)
+        te_data.x = z_norm(te_data.x)
 
         # Normalize the edge attribute
         norm_col = []

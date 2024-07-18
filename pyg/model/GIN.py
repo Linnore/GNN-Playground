@@ -207,6 +207,7 @@ class GINe_layer_mix(GIN_Custom):
         self.edge_update = edge_update
         self.edge_dim = edge_dim
         self.layer_mix = layer_mix
+        self.readout = kwargs.get('readout', None)
 
         super().__init__(
             *args,
@@ -239,8 +240,13 @@ class GINe_layer_mix(GIN_Custom):
             if self.batch_norm:
                 self.batch_norms.append(BatchNorm(self.hidden_channels))
 
+        if self.readout == "edge":
+            readout_in_channels = self.hidden_channels*3
+        elif self.readout == "node":
+            readout_in_channels = self.hidden_channels
+            
         self.mlp = Sequential(
-            Linear(self.hidden_channels*3, 50),
+            Linear(readout_in_channels, 50),
             ReLU(),
             Dropout(self.dropout),
             Linear(50, 25),
@@ -371,10 +377,14 @@ class GINe_layer_mix(GIN_Custom):
         if self.jk_mode != None:
             x = self.jk_linear(self.jk(xs))
 
+        if self.readout == "edge":
         # Dont know whether the relu is useful or not
-        out = torch.cat([x[src].relu(), x[dst].relu(), edge_attr], -1)
-        out = self.mlp(out)
-        return out
+            out = torch.cat([x[src].relu(), x[dst].relu(), edge_attr], -1)
+            out = self.mlp(out)
+            return out
+        elif self.readout == "node":
+            out = self.mlp(x)
+            return out
 
     def forward_default(self, x, edge_index, edge_attr):
         src, dst = edge_index
@@ -407,10 +417,14 @@ class GINe_layer_mix(GIN_Custom):
         if self.jk_mode != None:
             x = self.jk_linear(self.jk(xs))
 
+        if self.readout == "edge":
         # Dont know whether the relu is useful or not
-        out = torch.cat([x[src].relu(), x[dst].relu(), edge_attr], -1)
-        out = self.mlp(out)
-        return out
+            out = torch.cat([x[src].relu(), x[dst].relu(), edge_attr], -1)
+            out = self.mlp(out)
+            return out
+        elif self.readout == "node":
+            out = self.mlp(x)
+            return out
 
         # Original (slow):
         # x = x[edge_index.T].reshape(-1, 2 * self.hidden_channels).relu()
@@ -435,6 +449,7 @@ class GINe(torch.nn.Module):
         self.reverse_mp = kwargs.get("reverse_mp", False)
         self.layer_mix = layer_mix
         self.model_mix = model_mix
+        self.config = kwargs.get("config", {})
 
         if self.reverse_mp and self.layer_mix.lower() == "none":
             kwargs["reverse_mp"] = False
