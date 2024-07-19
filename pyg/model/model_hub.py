@@ -37,7 +37,6 @@ def get_model(config, train_loader):
     model_config.pop("num_neighbors", -1)
 
     dataset_config = config["dataset_config"]
-    model_config["readout"] = get_readout(dataset_config["task_type"])
 
     match model_config.pop("base_model"):
         case "GraphSAGE_PyG":
@@ -111,7 +110,7 @@ def get_model(config, train_loader):
                 config=archive_config,
                 **model_config)
         case "GINe":
-
+            model_config["readout"] = get_readout(dataset_config["task_type"])
             model = GINe(in_channels=dataset_config["num_node_features"],
                          out_channels=dataset_config["num_classes"],
                          hidden_channels=model_config.pop("hidden_channels"),
