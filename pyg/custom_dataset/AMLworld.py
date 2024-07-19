@@ -364,8 +364,6 @@ class AMLworld(InMemoryDataset):
             "Sent Currency,Amount Received,Received Currency," + \
             "Payment Format,Is Laundering\n"
 
-        logger.debug(header)
-
         firstTs = -1
         currency = dict()
         paymentFormat = dict()
