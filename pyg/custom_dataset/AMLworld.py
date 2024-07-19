@@ -360,8 +360,9 @@ class AMLworld(InMemoryDataset):
         formatted_trans_file = os.path.join(
             self.processed_dir, self.opt + "-formatted_transactions.csv")
 
-        header = "EdgeID,from_id,to_id,Timestamp,Amount Sent,Sent Currency,"
-        "Amount Received,Received Currency,Payment Format,Is Laundering\n"
+        header = "EdgeID,from_id,to_id,Timestamp,Amount Sent," + \
+            "Sent Currency,Amount Received,Received Currency," + \
+            "Payment Format,Is Laundering\n"
 
         firstTs = -1
         currency = dict()

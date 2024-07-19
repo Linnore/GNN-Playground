@@ -119,6 +119,9 @@ def add_train_parser(subparsers: argparse._SubParsersAction,
     AMLworld_config.add_argument('--task_type',
                                  choices=config.task_type_options,
                                  default=None)
+    general_config.add_argument('--verbose',
+                                action=argparse.BooleanOptionalAction,
+                                default=None)
 
 
 def add_inference_parser(subparsers: argparse._SubParsersAction,
@@ -170,6 +173,9 @@ def add_inference_parser(subparsers: argparse._SubParsersAction,
     general_config.add_argument('--seed', type=int, default=None)
     general_config.add_argument('--device', default=None)
     general_config.add_argument('--tqdm',
+                                action=argparse.BooleanOptionalAction,
+                                default=None)
+    general_config.add_argument('--verbose',
                                 action=argparse.BooleanOptionalAction,
                                 default=None)
 

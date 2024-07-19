@@ -82,7 +82,7 @@ def get_data_SAGE(config):
                          load_time_delta=AMLworld_config["add_time_delta"],
                          ibm_split=AMLworld_config["ibm_split"],
                          force_reload=AMLworld_config["force_reload"],
-                         verbose=False,
+                         verbose=config["general_config"]["verbose"],
                          readout=readout)[0])
 
         if AMLworld_config["add_egoID"]:

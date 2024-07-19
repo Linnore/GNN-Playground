@@ -101,7 +101,7 @@ def eval_node_classification(split,
         elif sampling_strategy == "GraphBatching":
             mask = None
 
-        targets = batch.y  # on cpu
+        targets = batch.y.to(device)
         outputs = model(**get_batch_input(batch, reverse_mp, device))
 
         if mask is not None:
@@ -118,7 +118,7 @@ def eval_node_classification(split,
 
     # Metrics
     predictions = torch.cat(predictions, dim=0).detach().cpu().numpy()
-    truths = torch.cat(truths, dim=0).detach().numpy()
+    truths = torch.cat(truths, dim=0).detach().cpu().numpy()
 
     return classification_report(truths, predictions, zero_division=0)
 
@@ -141,7 +141,7 @@ def eval_edge_classification(split,
         elif sampling_strategy in [None, "None"]:
             mask = eval(f"batch.{split}_mask")
 
-        targets = batch.y  # on cpu
+        targets = batch.y.to(device)
         outputs = model(**get_batch_input(batch, reverse_mp, device))
 
         if mask is not None:
@@ -158,7 +158,7 @@ def eval_edge_classification(split,
 
     # Metrics
     predictions = torch.cat(predictions, dim=0).detach().cpu().numpy()
-    truths = torch.cat(truths, dim=0).detach().numpy()
+    truths = torch.cat(truths, dim=0).detach().cpu().numpy()
 
     return classification_report(truths, predictions, zero_division=0)
 
