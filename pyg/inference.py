@@ -13,7 +13,14 @@ from loguru import logger
 from tqdm import tqdm
 
 
-def node_classification_inference(model, loader, split, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0):
+def node_classification_inference(model,
+                                  loader,
+                                  split,
+                                  enable_tqdm,
+                                  sampling_strategy,
+                                  device="cpu",
+                                  multilabel=False,
+                                  threshold=0):
     n_ids = []
     predictions = []
     bar = tqdm(loader, total=len(loader), disable=not enable_tqdm)
@@ -67,10 +74,8 @@ def infer_gnn(config):
     if not os.path.exists(dst_path):
         os.makedirs(dst_path)
     logger.info(f"Model is saved at {dst_path}")
-    model = load_pyt_model(
-        model_uri=f'models:/{model_name}/{version}',
-        dst_path=dst_path
-    )
+    model = load_pyt_model(model_uri=f'models:/{model_name}/{version}',
+                           dst_path=dst_path)
 
     # Need to overwrite the model configs from the loaded model
     overwrite_model_config(model, config)
@@ -87,16 +92,14 @@ def infer_gnn(config):
         enable_tqdm=vargs["tqdm"],
         sampling_strategy=general_config["sampling_strategy"],
         device=general_config["device"],
-        multilabel=True if dataset_config["task_type"].startswith(
-            "multi") else False
-    )
+        multilabel=True
+        if dataset_config["task_type"].startswith("multi") else False)
 
     # Save predictions
     pred_path = os.path.join(
         vargs["output_dir"],
         f"{config['model']}-v{version}-{config['dataset']}",
-        f"{vargs['split']}-pred"
-    )+".csv"
+        f"{vargs['split']}-pred") + ".csv"
 
     save_dir = os.path.split(pred_path)[0]
     if not os.path.exists(save_dir):

@@ -4,11 +4,10 @@ import pprint
 import os
 import copy
 
-import numpy as np
-
 from .data_utils import get_loader
 from .model.model_hub import get_model
-from .train_utils import get_loss_fn, get_run_step, get_batch_input, get_io_schema
+from .train_utils import (get_loss_fn, get_run_step, get_batch_input,
+                          get_io_schema)
 
 from loguru import logger
 from torch_geometric.nn import summary
@@ -32,8 +31,7 @@ def train_gnn(config):
     run_name = f"{config['model']}-{config['dataset']}"
     model_name = run_name
     run = mlflow.start_run(run_name=run_name)
-    mlflow.set_tag(
-        "base model", model_config["base_model"])
+    mlflow.set_tag("base model", model_config["base_model"])
     mlflow.set_tag("dataset", config["dataset"])
     logger.info(f"Launching run: {run.info.run_name}")
 
@@ -66,7 +64,8 @@ def train_gnn(config):
 
     # Summary logging
     reverse_mp = model_config.get("reverse_mp", False)
-    sample_input = get_batch_input(next(iter(train_loader)), reverse_mp, device)
+    sample_input = get_batch_input(next(iter(train_loader)), reverse_mp,
+                                   device)
     summary_str = summary(model, **sample_input)
     logger.info("Model Summary:\n" + summary_str)
     with open("logs/tmp/model_summary.txt", "w") as out_file:
@@ -74,8 +73,9 @@ def train_gnn(config):
     mlflow.log_artifact("logs/tmp/model_summary.txt")
 
     # Setup Optimizer
-    optimizer = torch.optim.Adam(
-        model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"])
+    optimizer = torch.optim.Adam(model.parameters(),
+                                 lr=params["lr"],
+                                 weight_decay=params["weight_decay"])
 
     # Setup metrics
     criterion = general_config["criterion"].lower()
@@ -86,23 +86,23 @@ def train_gnn(config):
 
     # Training loop
     patience = general_config["patience"]
-    if patience == None or patience <= 0:
+    if patience is None or patience <= 0:
         patience = general_config["num_epochs"]
 
     # Setup training steps according to task type
     run_step = get_run_step(
-        model,
-        loss_fn,
-        optimizer,
+        task_type=dataset_config["task_type"],
+        model=model,
+        loss_fn=loss_fn,
+        optimizer=optimizer,
         sampling_strategy=config["general_config"]["sampling_strategy"],
         enable_tqdm=general_config["tqdm"],
         device=device,
-        task_type=dataset_config["task_type"], 
         reverse_mp=reverse_mp,
         f1_average=general_config["f1_average"])
 
     best_epoch = 0
-    for epoch in range(1, 1+general_config["num_epochs"]):
+    for epoch in range(1, 1 + general_config["num_epochs"]):
         if general_config["tqdm"]:
             print(f"Epoch {epoch}:")
 
@@ -116,11 +116,12 @@ def train_gnn(config):
             val_loss, val_f1, _, _ = run_step("val", epoch, val_loader)
 
             # Test
-            _, test_f1, predictions, truths = run_step(
-                "test", epoch, test_loader)
+            _, test_f1, predictions, truths = run_step("test", epoch,
+                                                       test_loader)
 
-        logger.info(
-            f"Epoch {epoch}: train_loss={train_loss:<8.6g}, train_f1={train_f1:<8.6g}, val_loss={val_loss:<8.6g}, val_f1={val_f1:<8.6g}, test_f1={test_f1:<8.6g}")
+        logger.info(f"Epoch {epoch}: train_loss={train_loss:<8.6g}, "
+                    f"train_f1={train_f1:<8.6g}, val_loss={val_loss:<8.6g}, "
+                    f"val_f1={val_f1:<8.6g}, test_f1={test_f1:<8.6g}")
 
         # Best model
         if criterion == "loss":
@@ -132,62 +133,56 @@ def train_gnn(config):
             best_value = criterion_value
             mlflow.log_metric("Best Test F1", test_f1, epoch)
             best_model_state_dict = copy.deepcopy(model.state_dict())
-            best_report = classification_report(
-                truths, predictions, zero_division=0)
+            best_report = classification_report(truths,
+                                                predictions,
+                                                zero_division=0)
             best_epoch = epoch
             torch.save(
                 {
                     'epoch': epoch,
                     'optimizer_state_dict': optimizer.state_dict(),
-                },
-                save_path
-            )
+                }, save_path)
 
         # Early Stopping
-        if epoch-best_epoch > patience:
+        if epoch - best_epoch > patience:
             logger.info("Patience reached. Early stop the trainning.")
             break
 
     # Save model
     model.load_state_dict(best_model_state_dict)
-    input_schema, output_schema = get_io_schema(sample_input, dataset_config, reverse_mp)
+    input_schema, output_schema = get_io_schema(sample_input, dataset_config,
+                                                reverse_mp)
 
-    mlflow.pytorch.log_model(model,
-                             model_name,
-                             signature=ModelSignature(
-                                 inputs=input_schema, outputs=output_schema),
-                             )
+    mlflow.pytorch.log_model(
+        model,
+        model_name,
+        signature=ModelSignature(inputs=input_schema, outputs=output_schema),
+    )
     mlflow.log_artifact(save_path, "Optimizer States")
     os.remove(save_path)
 
     # Register the model
     if general_config["register_model"]:
         model_uri = f"runs:/{run.info.run_id}/{model_name}"
-        reg_model = mlflow.register_model(
-            model_uri=model_uri,
-            name=model_name,
-            tags=register_info.get("tags", {})
-        )
+        reg_model = mlflow.register_model(model_uri=model_uri,
+                                          name=model_name,
+                                          tags=register_info.get("tags", {}))
 
         # Write inference instructions as description
-        desc = [register_info.get("description")] if register_info.get(
-            "description") else []
+        desc = [register_info.get("description")
+                ] if register_info.get("description") else []
         desc.extend([
-            "Use the following codes for inference:",
-            "```python",
+            "Use the following codes for inference:", "```python",
             "from mlflow.pytorch import load_model as load_pyt_model",
             f"loaded_model = load_pyt_model('{model_uri}')",
-            "output = loaded_model(**input)",
-            "```"
+            "output = loaded_model(**input)", "```"
         ])
         desc = "\n".join(desc)
 
         client = MlflowClient()
-        client.update_model_version(
-            name=model_name,
-            version=reg_model.version,
-            description=desc
-        )
+        client.update_model_version(name=model_name,
+                                    version=reg_model.version,
+                                    description=desc)
         logger.success(
             f"Model registered as {model_name}, version {reg_model.version}")
 

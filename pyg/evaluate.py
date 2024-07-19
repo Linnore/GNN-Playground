@@ -16,10 +16,10 @@ OVERWRITE_MESSAGE_SET = set()
 
 def overwrite_config(config, key, value):
     global OVERWRITE_MESSAGE_SET
-    if value != None:
+    if value is not None:
         if value != config[key]:
             message = f'Overwrite {key}={value} from {key}={config[key]}'
-            if not message in OVERWRITE_MESSAGE_SET:
+            if message not in OVERWRITE_MESSAGE_SET:
                 OVERWRITE_MESSAGE_SET.add(message)
                 logger.warning(
                     f'Overwrite {key}={value} from {key}={config[key]}')
@@ -50,7 +50,7 @@ def update_config(config: dict, vargs: dict):
 
 def overwrite_config_from_vargs(config: dict, vargs: dict):
     for key, value in config.items():
-        if type(value) == dict:
+        if isinstance(value, dict):
             overwrite_config_from_vargs(value, vargs)
         elif key in vargs:
             overwrite_config(config, key, vargs[key])
@@ -134,7 +134,6 @@ def eval_edge_classification(split,
                              reverse_mp=False):
     predictions = []
     truths = []
-    has_edge_attr = 'edge_attr' in loader.data.edge_attrs()
     bar = tqdm(loader, total=len(loader), disable=not enable_tqdm)
     for batch in bar:
         if sampling_strategy == "SAGE":

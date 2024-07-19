@@ -17,12 +17,16 @@ from torch_geometric.transforms import BaseTransform
 
 
 def to_adj_nodes_with_times(data):
-    # Codes modified from https://github.com/IBM/Multi-GNN/blob/main/data_util.py
+    # Codes modified from
+    # https://github.com/IBM/Multi-GNN/blob/main/data_util.py
     num_nodes = data.num_nodes
     timestamps = torch.zeros(
-        (data.edge_index.shape[1], 1)) if data.timestamps is None else data.timestamps.reshape((-1, 1))
-    edges = torch.cat((data.edge_index.T, timestamps), dim=1) if not isinstance(
-        data, HeteroData) else torch.cat((data['node', 'to', 'node'].edge_index.T, timestamps), dim=1)
+        (data.edge_index.shape[1],
+         1)) if data.timestamps is None else data.timestamps.reshape((-1, 1))
+    edges = torch.cat(
+        (data.edge_index.T, timestamps),
+        dim=1) if not isinstance(data, HeteroData) else torch.cat(
+            (data['node', 'to', 'node'].edge_index.T, timestamps), dim=1)
     adj_list_out = dict([(i, []) for i in range(num_nodes)])
     adj_list_in = dict([(i, []) for i in range(num_nodes)])
     for u, v, t in edges:
@@ -33,10 +37,12 @@ def to_adj_nodes_with_times(data):
 
 
 def to_adj_edges_with_times(data):
-    # Codes adopted from https://github.com/IBM/Multi-GNN/blob/main/data_util.py
+    # Codes adopted from
+    # https://github.com/IBM/Multi-GNN/blob/main/data_util.py
     num_nodes = data.num_nodes
     timestamps = torch.zeros(
-        (data.edge_index.shape[1], 1)) if data.timestamps is None else data.timestamps.reshape((-1, 1))
+        (data.edge_index.shape[1],
+         1)) if data.timestamps is None else data.timestamps.reshape((-1, 1))
     edges = torch.cat((data.edge_index.T, timestamps), dim=1)
     # calculate adjacent edges with times per node
     adj_edges_out = dict([(i, []) for i in range(num_nodes)])
@@ -49,7 +55,8 @@ def to_adj_edges_with_times(data):
 
 
 def ports(edge_index, adj_list):
-    # Codes adopted from https://github.com/IBM/Multi-GNN/blob/main/data_util.py
+    # Codes adopted from
+    # https://github.com/IBM/Multi-GNN/blob/main/data_util.py
     ports = torch.zeros(edge_index.shape[1], 1)
     ports_dict = {}
     for v, nbs in adj_list.items():
@@ -67,7 +74,8 @@ def ports(edge_index, adj_list):
 
 
 def time_deltas(data, adj_edges_list):
-    # Codes adopted from https://github.com/IBM/Multi-GNN/blob/main/data_util.py
+    # Codes adopted from
+    # https://github.com/IBM/Multi-GNN/blob/main/data_util.py
     time_deltas = torch.zeros(data.edge_index.shape[1], 1)
     if data.timestamps is None:
         return time_deltas
@@ -76,9 +84,9 @@ def time_deltas(data, adj_edges_list):
             continue
         a = np.array(edges)
         a = a[a[:, -1].argsort()]
-        a_tds = [0] + [a[i+1, -1] - a[i, -1] for i in range(a.shape[0]-1)]
-        tds = np.hstack(
-            (a[:, 0].reshape(-1, 1), np.array(a_tds).reshape(-1, 1)))
+        a_tds = [0] + [a[i + 1, -1] - a[i, -1] for i in range(a.shape[0] - 1)]
+        tds = np.hstack((a[:, 0].reshape(-1,
+                                         1), np.array(a_tds).reshape(-1, 1)))
         for i, td in tds:
             time_deltas[i] = td
     return time_deltas
@@ -86,16 +94,20 @@ def time_deltas(data, adj_edges_list):
 
 # Codes adopted from https://github.com/IBM/Multi-GNN/blob/main/data_util.py
 class GraphData(Data):
-    '''This is the homogenous graph object we use for GNN training if reverse MP is not enabled'''
+    '''This is the homogenous graph object
+    we use for GNN training if reverse MP is not enabled'''
 
-    def __init__(
-        self, x: OptTensor = None, edge_index: OptTensor = None, edge_attr: OptTensor = None, y: OptTensor = None, pos: OptTensor = None,
-        readout: str = 'edge',
-        num_nodes: int = None,
-        timestamps: OptTensor = None,
-        node_timestamps: OptTensor = None,
-        **kwargs
-    ):
+    def __init__(self,
+                 x: OptTensor = None,
+                 edge_index: OptTensor = None,
+                 edge_attr: OptTensor = None,
+                 y: OptTensor = None,
+                 pos: OptTensor = None,
+                 readout: str = 'edge',
+                 num_nodes: int = None,
+                 timestamps: OptTensor = None,
+                 node_timestamps: OptTensor = None,
+                 **kwargs):
         super().__init__(x, edge_index, edge_attr, y, pos, **kwargs)
         self.readout = readout
         self.loss_fn = 'ce'
@@ -113,14 +125,15 @@ class GraphData(Data):
         reverse_ports = True
         adj_list_in, adj_list_out = to_adj_nodes_with_times(self)
         in_ports = ports(self.edge_index, adj_list_in)
-        out_ports = [ports(self.edge_index.flipud(),
-                           adj_list_out)] if reverse_ports else []
-        self.edge_attr = torch.cat(
-            [self.edge_attr, in_ports] + out_ports, dim=1)
+        out_ports = [ports(self.edge_index.flipud(), adj_list_out)
+                     ] if reverse_ports else []
+        self.edge_attr = torch.cat([self.edge_attr, in_ports] + out_ports,
+                                   dim=1)
         return self
 
     def add_time_deltas(self):
-        '''Adds time deltas (i.e. the time between subsequent transactions) to the edge features'''
+        '''Adds time deltas (i.e. the time between subsequent transactions)
+        to the edge features'''
         reverse_tds = True
         adj_list_in, adj_list_out = to_adj_edges_with_times(self)
         in_tds = time_deltas(self, adj_list_in)
@@ -145,7 +158,8 @@ class AddEgoIds_for_LinkNeighborLoader(BaseTransform):
             nodes = torch.unique(data.edge_label_index.view(-1)).to(device)
         else:
             nodes = torch.unique(
-                data['node', 'to', 'node'].edge_label_index.view(-1)).to(device)
+                data['node', 'to',
+                     'node'].edge_label_index.view(-1)).to(device)
         ids[nodes] = 1
         if not isinstance(data, HeteroData):
             data.x = torch.cat([x, ids], dim=1)
@@ -163,23 +177,39 @@ class AddEgoIds_for_NeighborLoader(BaseTransform):
         pass
 
     def __call__(self, data: Data):
-        x = data.x 
+        x = data.x
         device = x.device
         ids = torch.zeros((x.shape[0], 1), device=device)
         ids[:data.batch_size] = 1
         data.x = torch.cat([x, ids], dim=1)
         return data
 
+
 def z_norm(data):
     std = data.std(0)
-    std = torch.where(std == 0, torch.tensor(
-        1, dtype=torch.float32).cpu(), std)
+    std = torch.where(std == 0,
+                      torch.tensor(1, dtype=torch.float32).cpu(), std)
     return (data - data.mean(0)) / std
 
 
 class AMLworld(InMemoryDataset):
 
-    def __init__(self, root, opt="HI-Small", split="train", load_time_stamp=True, load_ports=True, load_time_delta=False, transform=None, pre_transform=None, pre_fileter=None, force_download=False, verbose=True, ibm_split=False, readout:Literal['edge', 'node'] = 'edge', *args, **kwargs):
+    def __init__(self,
+                 root,
+                 opt="HI-Small",
+                 split="train",
+                 load_time_stamp=True,
+                 load_ports=True,
+                 load_time_delta=False,
+                 transform=None,
+                 pre_transform=None,
+                 pre_fileter=None,
+                 force_download=False,
+                 verbose=True,
+                 ibm_split=False,
+                 readout: Literal['edge', 'node'] = 'edge',
+                 *args,
+                 **kwargs):
         """
         Args:
             opt (str, optional): _description_. Defaults to "HI-Small".
@@ -190,8 +220,10 @@ class AMLworld(InMemoryDataset):
         self.processed_in_this_call = False
         self.ibm_split = ibm_split
 
-        all_options = ["HI-Small", "HI-Medium", "HI-Large",
-                       "LI-Small", "LI-Medium", "LI-Large"]
+        all_options = [
+            "HI-Small", "HI-Medium", "HI-Large", "LI-Small", "LI-Medium",
+            "LI-Large"
+        ]
 
         if opt not in all_options:
             raise Exception(
@@ -199,11 +231,11 @@ class AMLworld(InMemoryDataset):
 
         self.opt = opt
 
-        super().__init__(root, transform, pre_transform, pre_fileter, *args, **kwargs)
+        super().__init__(root, transform, pre_transform, pre_fileter, *args,
+                         **kwargs)
 
         # self.load(self.processed_file_paths_by_split[split])
         self.data = torch.load(self.processed_file_paths_by_split[split])
-
 
         # Select features based on attribute options
         feature_cols = []
@@ -231,7 +263,7 @@ class AMLworld(InMemoryDataset):
             edge_features = list(feature_newID.keys())
             logger.info(f'Edge features being used: {edge_features}')
             del self._data.information
-            
+
         # Select the labels to returen
         self._data.readout = readout
         if readout == "edge":
@@ -239,25 +271,21 @@ class AMLworld(InMemoryDataset):
         elif readout == "node":
             self._data.y = self._data.x_label
             del self._data.x_label
-            
+
         # Add information to dataset object
         self.num_nodes = self._data.num_nodes
         self.num_edges = self._data.num_edges
 
     @property
     def raw_file_names(self):
-        all_files = ["HI-Large_Patterns.txt",
-                     "HI-Large_Trans.csv",
-                     "HI-Medium_Patterns.txt",
-                     "HI-Medium_Trans.csv",
-                     "HI-Small_Patterns.txt",
-                     "HI-Small_Trans.csv",
-                     "LI-Large_Patterns.txt",
-                     "LI-Large_Trans.csv",
-                     "LI-Medium_Patterns.txt",
-                     "LI-Medium_Trans.csv",
-                     "LI-Small_Patterns.txt",
-                     "LI-Small_Trans.csv"]
+        all_files = [
+            "HI-Large_Patterns.txt", "HI-Large_Trans.csv",
+            "HI-Medium_Patterns.txt", "HI-Medium_Trans.csv",
+            "HI-Small_Patterns.txt", "HI-Small_Trans.csv",
+            "LI-Large_Patterns.txt", "LI-Large_Trans.csv",
+            "LI-Medium_Patterns.txt", "LI-Medium_Trans.csv",
+            "LI-Small_Patterns.txt", "LI-Small_Trans.csv"
+        ]
 
         opt_files = []
         for file in all_files:
@@ -269,10 +297,10 @@ class AMLworld(InMemoryDataset):
     @property
     def processed_file_names_by_split(self):
         file_dict = {
-                "train": f"{self.opt}-train.pt",
-                "val": f"{self.opt}-val.pt",
-                "test": f"{self.opt}-test.pt"
-            }
+            "train": f"{self.opt}-train.pt",
+            "val": f"{self.opt}-val.pt",
+            "test": f"{self.opt}-test.pt"
+        }
         if self.ibm_split:
             for split, file in file_dict.items():
                 file_name = os.path.splitext(file)[0]
@@ -282,13 +310,13 @@ class AMLworld(InMemoryDataset):
     @property
     def processed_file_names(self):
         return list(self.processed_file_names_by_split.values())
-    
-    
-    @property 
+
+    @property
     def processed_file_paths_by_split(self):
         file_paths_dict = {}
         for split, file_name in self.processed_file_names_by_split.items():
-            file_paths_dict[split] = os.path.join(self.processed_dir, file_name)
+            file_paths_dict[split] = os.path.join(self.processed_dir,
+                                                  file_name)
         return file_paths_dict
 
     def download(self):
@@ -297,19 +325,26 @@ class AMLworld(InMemoryDataset):
             api = KaggleApi()
             api.authenticate()
 
-            api.dataset_download_files("ealtman2019/ibm-transactions-for-anti-money-laundering-aml",
-                                       self.raw_dir, unzip=True, force=self.force_download, quiet=not self.verbose)
-        except:
+            api.dataset_download_files(
+                "ealtman2019/ibm-transactions-for-anti-money-laundering-aml",
+                self.raw_dir,
+                unzip=True,
+                force=self.force_download,
+                quiet=not self.verbose)
+        except Exception:
             raise Exception(
-                "Downloading this dataset requires a configured Kaggle API for Python. Please refer to https://github.com/Kaggle/kaggle-api for proper configuration!")
+                "Downloading this dataset requires a configured Kaggle API for"
+                "Python. Please refer to https://github.com/Kaggle/kaggle-api"
+                "for proper configuration!")
 
     def process(self):
         self.processed_in_this_call = True
         infor_str_list = []
 
-
         ################################################################
-        # Step 1. Convert raw files from Kaggle to a formatted datatable. Adopt codes from "https://github.com/IBM/Multi-GNN/blob/main/format_kaggle_files.py"
+        # Step 1. Convert raw files from Kaggle to a formatted datatable.
+        # Adopt codes from
+        # "https://github.com/IBM/Multi-GNN/blob/main/format_kaggle_files.py"
 
         def get_dict_val(name, collection):
             if name in collection:
@@ -319,13 +354,14 @@ class AMLworld(InMemoryDataset):
                 collection[name] = val
             return val
 
-        raw_trans_file = os.path.join(self.raw_dir, self.opt+"_Trans.csv")
+        raw_trans_file = os.path.join(self.raw_dir, self.opt + "_Trans.csv")
         raw = datatable.fread(raw_trans_file, columns=datatable.str32)
 
         formatted_trans_file = os.path.join(
-            self.processed_dir, self.opt+"-formatted_transactions.csv")
+            self.processed_dir, self.opt + "-formatted_transactions.csv")
 
-        header = "EdgeID,from_id,to_id,Timestamp,Amount Sent,Sent Currency,Amount Received,Received Currency,Payment Format,Is Laundering\n"
+        header = "EdgeID,from_id,to_id,Timestamp,Amount Sent,Sent Currency,"
+        "Amount Received,Received Currency,Payment Format,Is Laundering\n"
 
         firstTs = -1
         currency = dict()
@@ -334,9 +370,11 @@ class AMLworld(InMemoryDataset):
 
         with open(formatted_trans_file, "w") as writer:
             writer.write(header)
-            for i in tqdm(range(raw.nrows), desc="Formatting files from Kaggle raw data:", disable=not self.verbose):
-                datetime_object = datetime.strptime(
-                    raw[i, "Timestamp"], '%Y/%m/%d %H:%M')
+            for i in tqdm(range(raw.nrows),
+                          desc="Formatting files from Kaggle raw data:",
+                          disable=not self.verbose):
+                datetime_object = datetime.strptime(raw[i, "Timestamp"],
+                                                    '%Y/%m/%d %H:%M')
                 ts = datetime_object.timestamp()
                 day = datetime_object.day
                 month = datetime_object.month
@@ -375,7 +413,8 @@ class AMLworld(InMemoryDataset):
         formatted.to_csv(formatted_trans_file)
 
         ################################################################
-        # Step 2. Load datatable as a PyG data object. Adopt codes from "https://github.com/IBM/Multi-GNN/blob/main/data_loading.py"
+        # Step 2. Load datatable as a PyG data object. Adopt codes from
+        # "https://github.com/IBM/Multi-GNN/blob/main/data_loading.py"
         df_edges = pd.read_csv(formatted_trans_file)
         if self.verbose:
             logger.info(
@@ -384,10 +423,13 @@ class AMLworld(InMemoryDataset):
         df_edges['Timestamp'] = df_edges['Timestamp'] - \
             df_edges['Timestamp'].min()
 
-        # Node Features are not available in this dataset. Set to all 1 as an auxiliary feature.
+        # Node Features are not available in this dataset.
+        # Set to all 1 as an auxiliary feature.
         max_n_id = df_edges.loc[:, ['from_id', 'to_id']].to_numpy().max() + 1
-        df_nodes = pd.DataFrame({'NodeID': np.arange(
-            max_n_id), 'Feature': np.ones(max_n_id)})
+        df_nodes = pd.DataFrame({
+            'NodeID': np.arange(max_n_id),
+            'Feature': np.ones(max_n_id)
+        })
 
         # Edge: transaction timestamp
         timestamps = torch.Tensor(df_edges['Timestamp'].to_numpy())
@@ -396,21 +438,23 @@ class AMLworld(InMemoryDataset):
         y = torch.LongTensor(df_edges['Is Laundering'].to_numpy())
 
         infor_str_list.append(
-            f"Illicit ratio = {sum(y)} / {len(y)} = {sum(y) / len(y) * 100:.2f}%")
-        infor_str_list.append(
-            f"Number of nodes (holdings doing transcations) = {df_nodes.shape[0]}")
-        infor_str_list.append(
-            f"Number of transactions = {df_edges.shape[0]}")
+            "Illicit ratio = "
+            f"{sum(y)} / {len(y)} = {sum(y) / len(y) * 100:.2f}%")
+        infor_str_list.append("Number of nodes (holdings doing transcations) "
+                              f"= {df_nodes.shape[0]}")
+        infor_str_list.append(f"Number of transactions = {df_edges.shape[0]}")
         if self.verbose:
-            logger.info(
-                f"Illicit ratio = {sum(y)} / {len(y)} = {sum(y) / len(y) * 100:.2f}%")
-            logger.info(
-                f"Number of nodes (holdings doing transcations) = {df_nodes.shape[0]}")
+            logger.info("Illicit ratio = "
+                        f"{sum(y)} / {len(y)} = {sum(y) / len(y) * 100:.2f}%")
+            logger.info("Number of nodes (holdings doing transcations) = "
+                        f"{df_nodes.shape[0]}")
             logger.info(f"Number of transactions = {df_edges.shape[0]}")
 
         # Define Node and Edge
-        edge_features = ['Timestamp', 'Amount Received',
-                         'Received Currency', 'Payment Format']
+        edge_features = [
+            'Timestamp', 'Amount Received', 'Received Currency',
+            'Payment Format'
+        ]
         node_features = ['Feature']
 
         x = torch.tensor(df_nodes.loc[:, node_features].to_numpy()).float()
@@ -421,74 +465,97 @@ class AMLworld(InMemoryDataset):
 
         n_days = int(timestamps.max() / (3600 * 24) + 1)
         n_samples = y.shape[0]
-        infor_str_list.append(
-            f'number of days and transactions in the data: {n_days} days, {n_samples} transactions')
+        infor_str_list.append("Number of days and transactions in the data: "
+                              f"{n_days} days, {n_samples} transactions")
         if self.verbose:
-            logger.info(
-                f'number of days and transactions in the data: {n_days} days, {n_samples} transactions')
+            logger.info('Number of days and transactions in the data: '
+                        f'{n_days} days, {n_samples} transactions')
 
         # Data splitting
         # irs = illicit ratios, inds = indices, trans = transactions
         daily_irs, weighted_daily_irs, daily_inds, daily_trans = [], [], [], []
         for day in range(n_days):
-            l = day * 24 * 3600
-            r = (day + 1) * 24 * 3600
-            day_inds = torch.where((timestamps >= l) & (timestamps < r))[0]
+            st = day * 24 * 3600  # start time
+            et = (day + 1) * 24 * 3600  # end time
+            day_inds = torch.where((timestamps >= st) & (timestamps < et))[0]
             daily_irs.append(y[day_inds].float().mean())
-            weighted_daily_irs.append(
-                y[day_inds].float().mean() * day_inds.shape[0] / n_samples)
+            weighted_daily_irs.append(y[day_inds].float().mean() *
+                                      day_inds.shape[0] / n_samples)
             daily_inds.append(day_inds)
             daily_trans.append(day_inds.shape[0])
 
         split_per = [0.6, 0.2, 0.2]
         daily_totals = np.array(daily_trans)
         d_ts = daily_totals
-        I = list(range(len(d_ts)))
+        idx = list(range(len(d_ts)))
         split_scores = dict()
-        for i, j in itertools.combinations(I, 2):
+        for i, j in itertools.combinations(idx, 2):
             if j >= i:
-                split_totals = [d_ts[:i].sum(), d_ts[i:j].sum(),
-                                d_ts[j:].sum()]
+                split_totals = [
+                    d_ts[:i].sum(), d_ts[i:j].sum(), d_ts[j:].sum()
+                ]
                 split_totals_sum = np.sum(split_totals)
-                split_props = [v/split_totals_sum for v in split_totals]
+                split_props = [v / split_totals_sum for v in split_totals]
                 split_error = [
-                    abs(v-t)/t for v, t in zip(split_props, split_per)]
+                    abs(v - t) / t for v, t in zip(split_props, split_per)
+                ]
                 score = max(split_error)  # - (split_totals_sum/total) + 1
                 split_scores[(i, j)] = score
             else:
                 continue
 
         i, j = min(split_scores, key=split_scores.get)
-        # Split contains a list for each split (train, validation and test) and each list contains the days that are part of the respective split
-        split = [list(range(i)), list(range(i, j)),
-                 list(range(j, len(daily_totals)))]
+        # Split contains a list for each split (train, validation and test)
+        # and each list contains the days that are part of the respective split
+        split = [
+            list(range(i)),
+            list(range(i, j)),
+            list(range(j, len(daily_totals)))
+        ]
         if self.verbose:
             logger.info(f'Calculate split: {split}')
 
-        # Now, we seperate the transactions based on their indices in the timestamp array
+        # Now, we seperate the transactions based on their
+        # indices in the timestamp array
         split_inds = {k: [] for k in range(3)}
         for i in range(3):
             for day in split[i]:
-                # split_inds contains a list for each split (tr,val,te) which contains the indices of each day seperately
+                # split_inds contains a list for each split (tr,val,te)
+                # which contains the indices of each day seperately
                 split_inds[i].append(daily_inds[day])
 
         tr_inds = torch.cat(split_inds[0])
         val_inds = torch.cat(split_inds[1])
         te_inds = torch.cat(split_inds[2])
 
-        infor_str_list.append(f"Total train samples: {tr_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-                              f"{y[tr_inds].float().mean() * 100 :.2f}% || Train days: {split[0]}")
-        infor_str_list.append(f"Total val samples: {val_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-                              f"{y[val_inds].float().mean() * 100:.2f}% || Val days: {split[1]}")
-        infor_str_list.append(f"Total test samples: {te_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-                              f"{y[te_inds].float().mean() * 100:.2f}% || Test days: {split[2]}")
+        infor_str_list.append(
+            "Total train samples: "
+            f"{tr_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
+            f"{y[tr_inds].float().mean() * 100 :.2f}% || "
+            f"Train days: {split[0]}")
+        infor_str_list.append(
+            "Total val samples: "
+            f"{val_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
+            f"{y[val_inds].float().mean() * 100:.2f}% || "
+            f"Val days: {split[1]}")
+        infor_str_list.append(
+            "Total test samples: "
+            f"{te_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
+            f"{y[te_inds].float().mean() * 100:.2f}% || "
+            f"Test days: {split[2]}")
         if self.verbose:
-            logger.info(f"Total train samples: {tr_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-                        f"{y[tr_inds].float().mean() * 100 :.2f}% || Train days: {split[0]}")
-            logger.info(f"Total val samples: {val_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-                        f"{y[val_inds].float().mean() * 100:.2f}% || Val days: {split[1]}")
-            logger.info(f"Total test samples: {te_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-                        f"{y[te_inds].float().mean() * 100:.2f}% || Test days: {split[2]}")
+            logger.info("Total train samples: "
+                        f"{tr_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
+                        f"{y[tr_inds].float().mean() * 100 :.2f}% || "
+                        f"Train days: {split[0]}")
+            logger.info("Total val samples: "
+                        f"{val_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
+                        f"{y[val_inds].float().mean() * 100:.2f}% || "
+                        f"Val days: {split[1]}")
+            logger.info("Total test samples: "
+                        f"{te_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
+                        f"{y[te_inds].float().mean() * 100:.2f}% || "
+                        f"Test days: {split[2]}")
 
         # Creating the final data objects
         tr_x, val_x, te_x = x, x, x
@@ -497,9 +564,11 @@ class AMLworld(InMemoryDataset):
             e_val = np.concatenate([tr_inds, val_inds])
             e_te = np.arange(edge_attr.shape[0])
             try:
-                logger.warning("Following IBM's repo, all edges are considered in test set. ")
-            except:
-                print("Warning: Following IBM's repo, all edges are considered in test set.")
+                logger.warning("Following IBM's repo, "
+                               "all edges are considered in test set. ")
+            except Exception:
+                print("Warning: Following IBM's repo, "
+                      "all edges are considered in test set.")
         else:
             e_val = val_inds.numpy()
             e_te = te_inds.numpy()
@@ -508,13 +577,11 @@ class AMLworld(InMemoryDataset):
         tr_edge_attr = edge_attr[e_tr]
         tr_y = y[e_tr]
         tr_edge_times = timestamps[e_tr]
-        tr_data = GraphData(
-            x=tr_x,
-            y=tr_y,
-            edge_index=tr_edge_index,
-            edge_attr=tr_edge_attr,
-            timestamps=tr_edge_times
-        )
+        tr_data = GraphData(x=tr_x,
+                            y=tr_y,
+                            edge_index=tr_edge_index,
+                            edge_attr=tr_edge_attr,
+                            timestamps=tr_edge_times)
         tr_nodes = torch.unique(tr_edge_index.view(-1))
         tr_data = tr_data.subgraph(tr_nodes)
         self.infer_licit_x(tr_data)
@@ -523,13 +590,11 @@ class AMLworld(InMemoryDataset):
         val_edge_attr = edge_attr[e_val]
         val_y = y[e_val]
         val_edge_times = timestamps[e_val]
-        val_data = GraphData(
-            x=val_x,
-            y=val_y,
-            edge_index=val_edge_index,
-            edge_attr=val_edge_attr,
-            timestamps=val_edge_times
-        )
+        val_data = GraphData(x=val_x,
+                             y=val_y,
+                             edge_index=val_edge_index,
+                             edge_attr=val_edge_attr,
+                             timestamps=val_edge_times)
         val_nodes = torch.unique(val_edge_index.view(-1))
         val_data = val_data.subgraph(val_nodes)
         self.infer_licit_x(val_data)
@@ -539,45 +604,44 @@ class AMLworld(InMemoryDataset):
         te_edge_attr = edge_attr[e_te]
         te_y = y[e_te]
         te_edge_times = timestamps[e_te]
-        te_data = GraphData(
-            x=te_x,
-            y=te_y,
-            edge_index=te_edge_index,
-            edge_attr=te_edge_attr,
-            timestamps=te_edge_times
-        )
+        te_data = GraphData(x=te_x,
+                            y=te_y,
+                            edge_index=te_edge_index,
+                            edge_attr=te_edge_attr,
+                            timestamps=te_edge_times)
         te_nodes = torch.unique(te_edge_index.view(-1))
         te_data = te_data.subgraph(te_nodes)
         self.infer_licit_x(te_data)
 
         # Adding ports and time-deltas
         if self.verbose:
-            logger.info(f"Start: adding ports")
+            logger.info("Start: adding ports")
         tr_data.add_ports()
         val_data.add_ports()
         te_data.add_ports()
         edge_features.extend(["In-Port", "Out-Port"])
         if self.verbose:
-            logger.info(f"Done: adding ports")
+            logger.info("Done: adding ports")
 
         if self.verbose:
-            logger.info(f"Start: adding time-deltas")
+            logger.info("Start: adding time-deltas")
         tr_data.add_time_deltas()
         val_data.add_time_deltas()
         te_data.add_time_deltas()
         edge_features.extend(["In-TimeDelta", "Out-TimeDelta"])
         if self.verbose:
-            logger.info(f"Done: adding time-deltas")
+            logger.info("Done: adding time-deltas")
 
         edge_features_colID = {}
         for id, feature in enumerate(edge_features):
             edge_features_colID[feature] = id
 
         infor_str_list.append(
-            f'Node features being used: {node_features} ("Feature" is a placeholder feature of all 1s)')
+            'Node features being used: '
+            f'{node_features} ("Feature" is a placeholder feature of all 1s)')
         if self.verbose:
-            logger.info(
-                f'Node features being used: {node_features} ("Feature" is a placeholder feature of all 1s)')
+            logger.info(f'Node features being used: {node_features} '
+                        '("Feature" is a placeholder feature of all 1s)')
 
         # Normalize node attribute
         tr_data.x = z_norm(tr_data.x)
@@ -591,14 +655,16 @@ class AMLworld(InMemoryDataset):
                 norm_col.append(id)
 
         tr_data.edge_attr[:, norm_col] = z_norm(tr_data.edge_attr[:, norm_col])
-        val_data.edge_attr[:, norm_col] = z_norm(
-            val_data.edge_attr[:, norm_col])
+        val_data.edge_attr[:, norm_col] = z_norm(val_data.edge_attr[:,
+                                                                    norm_col])
         te_data.edge_attr[:, norm_col] = z_norm(te_data.edge_attr[:, norm_col])
 
         information = "\n".join(infor_str_list)
         for data_split in [tr_data, val_data, te_data]:
             data_split.information = information
             data_split.edge_features_colID = edge_features_colID
+
+        data_list = [tr_data, val_data, te_data]
 
         if self.pre_filter is not None:
             data_list = [data for data in data_list if self.pre_filter(data)]
@@ -612,25 +678,27 @@ class AMLworld(InMemoryDataset):
         torch.save(te_data, file_dict["test"])
 
         # TODO: Process pattern tag into data object
-        raw_pattern_file = os.path.join(self.raw_dir, self.opt+"_Patterns.txt")
-
+        # raw_pattern_file = os.path.join(self.raw_dir,
+        #                                 self.opt + "_Patterns.txt")
 
     def infer_licit_x(self, input_data: GraphData, in_place=True):
         if in_place:
             data = input_data
         else:
             data = input_data.clone()
-            
+
         x1, x2 = data.edge_index[:, data.y.bool()]
         data.x_label = torch.zeros(data.x.shape[0], dtype=int)
         data.x_label[x1] = 1
         data.x_label[x2] = 1
-        
+
         if not in_place:
             return data
 
+
 def main():
     dataset = AMLworld("./dataset/AMLworld")
+    print(dataset[0])
 
 
 if __name__ == "__main__":

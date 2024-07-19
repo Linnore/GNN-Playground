@@ -1,7 +1,6 @@
 import os
 import argparse
 import requests
-import mlflow
 import torch_geometric
 import config
 import sys
@@ -10,35 +9,44 @@ import torch
 from loguru import logger
 
 
-def add_train_parser(subparsers: argparse._SubParsersAction, parent_parser: argparse.ArgumentParser, config: config):
+def add_train_parser(subparsers: argparse._SubParsersAction,
+                     parent_parser: argparse.ArgumentParser, config: config):
 
-    parser = subparsers.add_parser(
-        "train", help="Train a model on a dataset.", parents=[parent_parser])
+    parser = subparsers.add_parser("train",
+                                   help="Train a model on a dataset.",
+                                   parents=[parent_parser])
 
     # Required Field
-    parser.add_argument(
-        'model', choices=list(config.model_collections.keys()))
-    parser.add_argument('dataset', choices=list(
-        config.dataset_collections.keys()))
+    parser.add_argument('model', choices=list(config.model_collections.keys()))
+    parser.add_argument('dataset',
+                        choices=list(config.dataset_collections.keys()))
 
     # General settings
     general_config = parser.add_argument_group("Global Settigns")
-    general_config.add_argument(
-        '--framework', choices=config.framework_options, default=None)
-    general_config.add_argument(
-        '--sampling_strategy', choices=config.sampling_strategy_options, default=None)
-    general_config.add_argument(
-        '--SAGE_inductive_option', choices=config.SAGE_inductive_options, default=None)
-    general_config.add_argument(
-        '--sample_when_predict', action=argparse.BooleanOptionalAction, default=None)
+    general_config.add_argument('--framework',
+                                choices=config.framework_options,
+                                default=None)
+    general_config.add_argument('--sampling_strategy',
+                                choices=config.sampling_strategy_options,
+                                default=None)
+    general_config.add_argument('--SAGE_inductive_option',
+                                choices=config.SAGE_inductive_options,
+                                default=None)
+    general_config.add_argument('--sample_when_predict',
+                                action=argparse.BooleanOptionalAction,
+                                default=None)
     general_config.add_argument('--seed', type=int, default=None)
     general_config.add_argument('--device', default=None)
-    general_config.add_argument(
-        '--tqdm', action=argparse.BooleanOptionalAction, default=None)
-    general_config.add_argument(
-        '--register_model', action=argparse.BooleanOptionalAction, default=None)
-    general_config.add_argument(
-        '--criterion', type=str, default=None, choices=["loss", "accuracy", "f1"])
+    general_config.add_argument('--tqdm',
+                                action=argparse.BooleanOptionalAction,
+                                default=None)
+    general_config.add_argument('--register_model',
+                                action=argparse.BooleanOptionalAction,
+                                default=None)
+    general_config.add_argument('--criterion',
+                                type=str,
+                                default=None,
+                                choices=["loss", "accuracy", "f1"])
     general_config.add_argument('--num_epochs', type=int, default=None)
     general_config.add_argument('--patience', type=int, default=None)
     general_config.add_argument('--num_workers', type=int, default=None)
@@ -50,120 +58,170 @@ def add_train_parser(subparsers: argparse._SubParsersAction, parent_parser: argp
     hyperparameters.add_argument('--weight_decay', type=float, default=None)
 
     # Loss function hyperparameters
-    hyperparameters.add_argument(
-        '--weighted_BCE', action=argparse.BooleanOptionalAction, default=None)
-    hyperparameters.add_argument(
-        '--weighted_CE', action=argparse.BooleanOptionalAction, default=None)
+    hyperparameters.add_argument('--weighted_BCE',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
+    hyperparameters.add_argument('--weighted_CE',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
 
     # Model hyperparameters
     model_params = parser.add_argument_group("Model Hyperparameters")
-    model_params.add_argument('--hidden_channels_per_head', type=int,
-                              help='Number of hidden node channels per head.', default=None)
+    model_params.add_argument('--hidden_channels_per_head',
+                              type=int,
+                              help='Number of hidden node channels per head.',
+                              default=None)
     model_params.add_argument('--num_layers', type=int, default=None)
     model_params.add_argument('--heads', type=int, default=None)
     model_params.add_argument('--output_heads', type=int, default=None)
-    model_params.add_argument(
-        '--num_neighbors', type=int, nargs="+", default=None)
+    model_params.add_argument('--num_neighbors',
+                              type=int,
+                              nargs="+",
+                              default=None)
     model_params.add_argument('--dropout', type=float, default=None)
     model_params.add_argument('--jk', type=str, default=None)
-    model_params.add_argument(
-        '--v2', action=argparse.BooleanOptionalAction, default=None)
-    model_params.add_argument(
-        '--edge_update', action=argparse.BooleanOptionalAction, default=None)
-    model_params.add_argument(
-        '--batch_norm', action=argparse.BooleanOptionalAction, default=None)
-    model_params.add_argument(
-        '--reverse_mp', action=argparse.BooleanOptionalAction, default=None)
-    model_params.add_argument(
-        '--layer_mix', choices=["None", "Mean", "Sum", "Max", "Cat"])
+    model_params.add_argument('--v2',
+                              action=argparse.BooleanOptionalAction,
+                              default=None)
+    model_params.add_argument('--edge_update',
+                              action=argparse.BooleanOptionalAction,
+                              default=None)
+    model_params.add_argument('--batch_norm',
+                              action=argparse.BooleanOptionalAction,
+                              default=None)
+    model_params.add_argument('--reverse_mp',
+                              action=argparse.BooleanOptionalAction,
+                              default=None)
+    model_params.add_argument('--layer_mix',
+                              choices=["None", "Mean", "Sum", "Max", "Cat"])
     model_params.add_argument('--model_mix', choices=["Mean", "Sum", "Max"])
 
     # AMLworld configuration
     AMLworld_config = parser.add_argument_group("Arguments for AMLworld.")
-    AMLworld_config.add_argument(
-        '--add_time_stamp', action=argparse.BooleanOptionalAction, default=None)
-    AMLworld_config.add_argument(
-        '--add_egoID', action=argparse.BooleanOptionalAction, default=None)
-    AMLworld_config.add_argument(
-        '--add_port', action=argparse.BooleanOptionalAction, default=None)
-    AMLworld_config.add_argument(
-        '--add_time_delta', action=argparse.BooleanOptionalAction, default=None)
-    AMLworld_config.add_argument(
-        '--ibm_split', action=argparse.BooleanOptionalAction, default=None)
-    AMLworld_config.add_argument(
-        '--force_reload', action=argparse.BooleanOptionalAction, default=None)
-    AMLworld_config.add_argument(
-        '--task_type', choices=config.task_type_options, default=None)
+    AMLworld_config.add_argument('--add_time_stamp',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
+    AMLworld_config.add_argument('--add_egoID',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
+    AMLworld_config.add_argument('--add_port',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
+    AMLworld_config.add_argument('--add_time_delta',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
+    AMLworld_config.add_argument('--ibm_split',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
+    AMLworld_config.add_argument('--force_reload',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
+    AMLworld_config.add_argument('--task_type',
+                                 choices=config.task_type_options,
+                                 default=None)
 
 
-def add_inference_parser(subparsers: argparse._SubParsersAction, parent_parser: argparse.ArgumentParser, config: config):
+def add_inference_parser(subparsers: argparse._SubParsersAction,
+                         parent_parser: argparse.ArgumentParser,
+                         config: config):
     parser = subparsers.add_parser(
-        "inference", help="Inference on a dataset's test split using a registered mlflow model.", parents=[parent_parser])
+        "inference",
+        help="Inference on a dataset's test split using a "
+        "registered mlflow model.",
+        parents=[parent_parser])
 
     # Required Field
-    parser.add_argument('dataset', choices=list(
-        config.dataset_collections.keys()))
+    parser.add_argument('dataset',
+                        choices=list(config.dataset_collections.keys()))
 
     parser.add_argument(
         '--model', help="Model name of the registerted model to evaluate.")
 
-    parser.add_argument('--version', type=int, default=None,
+    parser.add_argument('--version',
+                        type=int,
+                        default=None,
                         help='Use the latest version if not specified.')
 
-    parser.add_argument('--split', choices=["train", "val", "test", "unlabelled"], default="test",
-                        help='Select the split of the data set to predict. Supported values [train, val, test] for labelled split, and [unlabelled] for unlabelled split. The dataset should be able to loaded as a pytorch geometric dataset, and each data object has the attribute {split_name}_mask to get the split for inference. ')
+    parser.add_argument(
+        '--split',
+        choices=["train", "val", "test", "unlabelled"],
+        default="test",
+        help='Select the split of the data set to predict. Supported values '
+        '[train, val, test] for labelled split, and [unlabelled] for '
+        'unlabelled split. The dataset should be able to loaded as a pytorch '
+        'geometric dataset, and each data object has the attribute '
+        '{split_name}_mask to get the split for inference.')
     parser.add_argument('--output_dir', default="./output")
 
     # General settings
     general_config = parser.add_argument_group("Global Settigns")
-    general_config.add_argument(
-        '--framework', choices=config.framework_options, default=None)
-    general_config.add_argument(
-        '--sampling_strategy', choices=config.sampling_strategy_options, default=None)
-    general_config.add_argument(
-        '--SAGE_inductive_option', choices=config.SAGE_inductive_options, default=None)
-    general_config.add_argument(
-        '--sample_when_predict', action=argparse.BooleanOptionalAction, default=None)
+    general_config.add_argument('--framework',
+                                choices=config.framework_options,
+                                default=None)
+    general_config.add_argument('--sampling_strategy',
+                                choices=config.sampling_strategy_options,
+                                default=None)
+    general_config.add_argument('--SAGE_inductive_option',
+                                choices=config.SAGE_inductive_options,
+                                default=None)
+    general_config.add_argument('--sample_when_predict',
+                                action=argparse.BooleanOptionalAction,
+                                default=None)
     general_config.add_argument('--seed', type=int, default=None)
     general_config.add_argument('--device', default=None)
-    general_config.add_argument(
-        '--tqdm', action=argparse.BooleanOptionalAction, default=None)
+    general_config.add_argument('--tqdm',
+                                action=argparse.BooleanOptionalAction,
+                                default=None)
 
 
-def add_evaluate_parser(subparsers: argparse._SubParsersAction, parent_parser: argparse.ArgumentParser, config: config):
+def add_evaluate_parser(subparsers: argparse._SubParsersAction,
+                        parent_parser: argparse.ArgumentParser,
+                        config: config):
     parser = subparsers.add_parser(
-        "evaluate", help="Evaluate a registered model on a dataset", parents=[parent_parser])
+        "evaluate",
+        help="Evaluate a registered model on a dataset",
+        parents=[parent_parser])
 
     # Required Field
-    parser.add_argument('dataset', choices=list(
-        config.dataset_collections.keys()))
+    parser.add_argument('dataset',
+                        choices=list(config.dataset_collections.keys()))
 
     parser.add_argument(
         '--model', help="Model name of the registerted model to evaluate.")
-    parser.add_argument('--version', type=int, default=None,
+    parser.add_argument('--version',
+                        type=int,
+                        default=None,
                         help='Use the latest version if not specified.')
 
     # General settings
     general_config = parser.add_argument_group("Global Settigns")
-    general_config.add_argument(
-        '--framework', choices=config.framework_options, default=None)
-    general_config.add_argument(
-        '--sampling_strategy', choices=config.sampling_strategy_options, default=None)
-    general_config.add_argument(
-        '--SAGE_inductive_option', choices=config.SAGE_inductive_options, default=None)
-    general_config.add_argument(
-        '--sample_when_predict', action=argparse.BooleanOptionalAction, default=None)
+    general_config.add_argument('--framework',
+                                choices=config.framework_options,
+                                default=None)
+    general_config.add_argument('--sampling_strategy',
+                                choices=config.sampling_strategy_options,
+                                default=None)
+    general_config.add_argument('--SAGE_inductive_option',
+                                choices=config.SAGE_inductive_options,
+                                default=None)
+    general_config.add_argument('--sample_when_predict',
+                                action=argparse.BooleanOptionalAction,
+                                default=None)
     general_config.add_argument('--seed', type=int, default=None)
     general_config.add_argument('--device', default=None)
-    general_config.add_argument(
-        '--tqdm', action=argparse.BooleanOptionalAction, default=None)
+    general_config.add_argument('--tqdm',
+                                action=argparse.BooleanOptionalAction,
+                                default=None)
 
-    # AMLworld configuration. Allow evaluate on a different splitting setting to the training one
+    # AMLworld configuration.
+    # Allow evaluate on a different splitting setting to the training one
     AMLworld_config = parser.add_argument_group("Arguments for AMLworld.")
-    AMLworld_config.add_argument(
-        '--ibm_split', action=argparse.BooleanOptionalAction, default=None)
-    AMLworld_config.add_argument(
-        '--force_reload', action=argparse.BooleanOptionalAction, default=None)
+    AMLworld_config.add_argument('--ibm_split',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
+    AMLworld_config.add_argument('--force_reload',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
 
 
 def create_parser(config: config):
@@ -172,8 +230,8 @@ def create_parser(config: config):
 
     # Parser for common arguments
     parent_parser = argparse.ArgumentParser(add_help=False)
-    parent_parser.add_argument(
-        '--debug', action=argparse.BooleanOptionalAction)
+    parent_parser.add_argument('--debug',
+                               action=argparse.BooleanOptionalAction)
 
     # MLflow settings
     mlflow_config = parent_parser.add_argument_group('MLflow configuration')
@@ -181,8 +239,13 @@ def create_parser(config: config):
     mlflow_config.add_argument('--username', default=None)
     mlflow_config.add_argument('--password', default=None)
     mlflow_config.add_argument('--experiment', default=None)
-    mlflow_config.add_argument('--auth', action=argparse.BooleanOptionalAction,
-                               help="Indicate whether the remote mlflow tracking server requires authentication. If enable, please provide the credentials in 'mlflow_config.json'.", default=None)
+    mlflow_config.add_argument(
+        '--auth',
+        action=argparse.BooleanOptionalAction,
+        help="Indicate whether the remote mlflow tracking server requires "
+        "authentication. If enable, please provide the credentials in "
+        "'mlflow_config.json'.",
+        default=None)
 
     # Create subparsers
     subparsers = parser.add_subparsers(dest="mode", required=True)
@@ -206,20 +269,24 @@ def setup_mlflow(config):
     mlflow_config = config["mlflow_config"]
     os.environ["MLFLOW_TRACKING_URI"] = mlflow_config['tracking_uri']
     if mlflow_config["auth"]:
-        response = requests.get(
-            f"{mlflow_config['tracking_uri']}",
-            auth=(mlflow_config["username"], mlflow_config["password"])
-        )
+        response = requests.get(f"{mlflow_config['tracking_uri']}",
+                                auth=(mlflow_config["username"],
+                                      mlflow_config["password"]))
         if (response.status_code == 200):
             logger.success(
-                f"Successfully logged in to the MLFlow server at {mlflow_config['tracking_uri']} as {mlflow_config['username']}.")
+                f"Successfully logged in to the MLFlow server "
+                f"at {mlflow_config['tracking_uri']} as "
+                f"{mlflow_config['username']}."
+            )
 
             os.environ["MLFLOW_TRACKING_USERNAME"] = mlflow_config['username']
             os.environ["MLFLOW_TRACKING_PASSWORD"] = mlflow_config['password']
 
         else:
             raise NotImplementedError(
-                f"Failed to log in to the MLFlow server at {mlflow_config['tracking_uri']}!")
+                "Failed to log in to the MLFlow server "
+                f"at {mlflow_config['tracking_uri']}!"
+            )
 
 
 def init_config():
@@ -232,10 +299,10 @@ OVERWRITE_MESSAGE_SET = set()
 
 def overwrite_config(config, key, value):
     global OVERWRITE_MESSAGE_SET
-    if value != None:
+    if value is not None:
         if value != config[key]:
             message = f'Overwrite {key}={value} from {key}={config[key]}'
-            if not message in OVERWRITE_MESSAGE_SET:
+            if message not in OVERWRITE_MESSAGE_SET:
                 OVERWRITE_MESSAGE_SET.add(message)
                 logger.warning(
                     f'Overwrite {key}={value} from {key}={config[key]}')
@@ -248,8 +315,8 @@ def update_config(config: dict, vargs: dict):
     config["dataset"] = vargs["dataset"]
 
     if config["mode"] == "train":
-        model_overwrite_config = config["model_collections"][config["model"]].pop(
-            "overwrite", {})
+        model_overwrite_config = config["model_collections"][
+            config["model"]].pop("overwrite", {})
         config = overwrite_config_from_vargs(config, model_overwrite_config)
 
     config = overwrite_config_from_vargs(config, vargs)
@@ -266,7 +333,7 @@ def update_config(config: dict, vargs: dict):
 
 def overwrite_config_from_vargs(config: dict, vargs: dict):
     for key, value in config.items():
-        if type(value) == dict:
+        if isinstance(value, dict):
             overwrite_config_from_vargs(value, vargs)
         elif key in vargs:
             overwrite_config(config, key, vargs[key])
@@ -283,5 +350,5 @@ def setup_logger(args):
     if not os.path.exists(tmp_dir):
         os.makedirs(tmp_dir)
 
-    logger.add(os.path.join(
-        log_dir, "log_{time:YYYY-MM-DD-HH_mm}.txt"), rotation='10 MB')
+    logger.add(os.path.join(log_dir, "log_{time:YYYY-MM-DD-HH_mm}.txt"),
+               rotation='10 MB')

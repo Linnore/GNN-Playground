@@ -2,7 +2,9 @@
 Configurations
 
 Priority of configuration:
-Command line arguments > configuraions in model["overwirte"] > other configuration.
+Command line arguments >
+configuraions in model["overwirte"] >
+other configuration
 """
 
 
@@ -23,15 +25,16 @@ class config:
 
     general_config = {
         "framework": "transductive",  # Must be transductive or inductive
+        "sampling_strategy":
+        "None",  # Must be choosen from sampling_strategy options
 
-        "sampling_strategy": "None",  # Must be choosen from sampling_strategy options
-
-        # Used if sampling_strategy is SAGE; Must be choosen from SAGE_inductive_options
+        # Used if sampling_strategy is SAGE;
+        # Must be choosen from SAGE_inductive_options
         "SAGE_inductive_option": "strict",
 
-        # Enable to use sampling strategy when predicting (val, test, inference). Default: False.
+        # Enable to use sampling strategy
+        # when predicting (val, test, inference). Default: False.
         "sample_when_predict": False,
-
         "seed": 118010142,
         "device": "cpu",
         "tqdm": False,
@@ -54,29 +57,38 @@ class config:
         "CE_weight": [1, 6],
         "weighted_BCE": False,  # Only useful for multi-label task.
     }
-
     """Options for difference experiment settings
 
-    transductive: 
-        The data split will follow a transductive manner. Training nodes can connected with validation nodes or testing nodes, though backward propogation is only applied on the loss computed by the training nodes.
-        
+    transductive:
+        The data split will follow a transductive manner.
+        Training nodes can connected with validation nodes or testing nodes,
+        though backward propogation is only applied on the loss computed by
+        the training nodes.
+
     inductive:
         - If sampling_strategy is "SAGE":
             -  default or strict
-                The data will be split to train_subgraph, val_subgraph, and test_subgraph. No message passing across the train. val, and test datasets is allowed.
+                The data will be split to train_subgraph, val_subgraph,
+                and test_subgraph. No message passing across the train,
+                val, and test datasets is allowed.
             -  soft:
-                Training nodes are cut off from validation nodes and testing nodes to form a training subgraph. However, when doing inference on the validation nodes and testing nodes, the edges  <Node_train, Node_val/Node_test>  and <Node_val, Node_test> can be used.
+                Training nodes are cut off from validation nodes and testing
+                nodes to form a training subgraph. However, when doing
+                inference on the validation nodes and testing nodes,
+                the edges  <Node_train, Node_val/Node_test>  and
+                <Node_val, Node_test> can be used.
         - If sampling_strategy is "SAINT"
             TODO
         - If sampling_strategy is "None". string("None")!!!
-            This should only happen when the framework is transductive. All neighbors will be used, so the model behaves like GCN. 
+            This should only happen when the framework is transductive.
+            All neighbors will be used, so the model behaves like GCN.
         - If sampling_strategy is "GraphBatching":
-            Graph-level batching. This option is useful for dataset containing multiple graphs. Each graph will be regarded as one batch-element as a whole. E.g., batch_size = 2 will give each batch containing 2 graphs.
+            Graph-level batching. This option is useful for dataset
+            containing multiple graphs. Each graph will be regarded
+            as one batch-element as a whole. E.g., batch_size = 2 will give
+            each batch containing 2 graphs.
     """
-    framework_options = [
-        "transductive",
-        "inductive"
-    ]
+    framework_options = ["transductive", "inductive"]
     sampling_strategy_options = [
         "SAGE",  # use the inductive learning proposed by GraphSAGE
         "SAINT",  # use the inductive learning proposed by GraphSAINT
@@ -166,7 +178,6 @@ class config:
             "skip_connection": True,
         },
 
-
         # # Equivalent to GAT with equal attention + jk.
         # # TODO: Customizable GraphSAGE with skip-connection
         # "GAT-Equal-benchmark-in":{
@@ -208,7 +219,6 @@ class config:
             "GINE": False,
             "skip_connection": False,
         },
-
         "GIN-PyG-trans": {
             "base_model": "GIN_PyG",
             "overwrite": {
@@ -229,7 +239,6 @@ class config:
             "num_MLP_layers": 2,
             "dropout": 0,
         },
-
         "PNA-PyG-trans": {
             "base_model": "PNA_PyG",
             "overwrite": {
@@ -241,15 +250,13 @@ class config:
             # Registeration inforamtion for MLflow
             "register_info": {
                 "description": "Benchmark PNA model.",
-                "tags": {
-                },
+                "tags": {},
             },
             "hidden_channels": 64,
             "num_layers": 2,
             "dropout": 0.7,
             "jk": "cat"
         },
-
         "PNA-benchmark-trans": {
             "base_model": "PNA_Custom",
             "overwrite": {
@@ -261,8 +268,7 @@ class config:
             # Registeration inforamtion for MLflow
             "register_info": {
                 "description": "Benchmark PNA model.",
-                "tags": {
-                },
+                "tags": {},
             },
             "hidden_channels": 64,
             "num_layers": 2,
@@ -270,7 +276,6 @@ class config:
             "dropout": 0.6,
             # "jk": "cat"
         },
-
         "GINe-in": {
             "base_model": "GINe",
             "overwrite": {
@@ -311,11 +316,9 @@ class config:
             "dropout": 0.1,
             "batch_norm": "will be overwritten",
             "reverse_mp": False,
-            "batch_norm": True,
             "layer_mix": "None",
             "model_mix": "Mean",
         },
-        
         "GINe-in-NC": {
             "base_model": "GINe",
             "overwrite": {
@@ -357,7 +360,6 @@ class config:
             "dropout": 0.1,
             "batch_norm": "will be overwritten",
             "reverse_mp": False,
-            "batch_norm": True,
             "layer_mix": "None",
             "model_mix": "Mean",
         }
@@ -368,9 +370,9 @@ class config:
     #  - "single-label-NC" : single label node classification
     #  - "multi-label-NC" : multi-label node classification
     task_type_options = [
-        "single-label-NC", 
+        "single-label-NC",
         "multi-label-NC",
-        "single-label-EC", 
+        "single-label-EC",
     ]
     dataset_collections = {
         "Cora": {
@@ -423,23 +425,18 @@ class config:
         "AMLworld-HI-Small": {
             # configured by AMLworld_config
         },
-
         "AMLworld-HI-Medium": {
             # configured by AMLworld_config
         },
-        
         "AMLworld-HI-Large": {
             # configured by AMLworld_config
         },
-        
         "AMLworld-LI-Small": {
             # configured by AMLworld_config
         },
-        
         "AMLworld-LI-Medium": {
             # configured by AMLworld_config
         },
-        
         "AMLworld-LI-Large": {
             # configured by AMLworld_config
         },

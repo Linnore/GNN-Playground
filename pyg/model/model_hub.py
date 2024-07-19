@@ -2,7 +2,8 @@ import copy
 
 from torch_geometric.nn.conv import PNAConv
 
-from loguru import logger
+from loguru import logger  # noqa
+
 from .GraphSAGE import GraphSAGE_PyG
 from .GAT import GAT_PyG, GAT_Custom
 from .GIN import GIN_PyG, GIN_Custom, GINe
