@@ -8,6 +8,8 @@ from loguru import logger
 from sklearn.metrics import f1_score
 from sklearn.utils.class_weight import compute_class_weight
 
+from mlflow.types.schema import Schema, TensorSpec
+
 
 def get_batch_input(batch, reverse_mp, device):
     input_dict = {}
@@ -19,8 +21,38 @@ def get_batch_input(batch, reverse_mp, device):
         input_dict["edge_attr"] = batch.edge_attr.to(device)
         if reverse_mp:
             input_dict["rev_edge_attr"] = batch.rev_edge_attr.to(device)
-    
+
     return input_dict
+
+
+def get_io_schema(sample_input: dict, dataset_config: dict, reverse_mp):
+    input_list = [
+        TensorSpec(np.dtype(np.float32),
+                   (-1, dataset_config["num_node_features"]), "x"),
+        TensorSpec(np.dtype(np.int64), (2, -1), "edge_index"),
+    ]
+    if "edge_attr" in sample_input:
+        input_list.append(
+            TensorSpec(np.dtype(np.float32),
+                       (-1, sample_input["edge_attr"].shape[1]), "edge_attr")
+        )
+    if "rev_edge_index" in sample_input:
+        input_list.append(
+            TensorSpec(np.dtype(np.float32),
+                       (2, -1), "rev_edge_index")
+        )
+    if "rev_edge_attr" in sample_input:
+        input_list.append(
+            TensorSpec(np.dtype(np.float32),
+                       (-1, sample_input["rev_edge_attr"].shape[1]), "rev_edge_attr")
+        )
+
+    input_schema = Schema(input_list)
+    output_schema = Schema([
+        TensorSpec(np.dtype(np.float32), (-1, dataset_config["num_classes"]))
+    ])
+
+    return input_schema, output_schema
 
 
 def get_pos_weight_for_BCEWithLogitsLoss(data):
@@ -28,7 +60,7 @@ def get_pos_weight_for_BCEWithLogitsLoss(data):
     total_num = data.num_nodes
     pos_cnt = torch.unique(data.y, return_counts=True)[-1]
     neg_cnt = total_num - pos_cnt
-    pos_weight = neg_cnt/pos_cnt
+    pos_weight = neg_cnt / pos_cnt
     logger.info(f"Loss weight: pos_weight={pos_weight}")
     return pos_weight
 
@@ -38,8 +70,9 @@ def get_weight_for_CrossEntropyLoss(data, config):
     if weight == "auto":
         # TODO: get weights for graph batching
         y = data.y.numpy()
-        weight = compute_class_weight(
-            class_weight="balanced", classes=np.unique(y), y=y)
+        weight = compute_class_weight(class_weight="balanced",
+                                      classes=np.unique(y),
+                                      y=y)
     weight = torch.tensor(weight, dtype=torch.float32)
     logger.info(f"Loss weight: weight={weight}")
     return weight
@@ -52,7 +85,8 @@ def get_loss_fn(config, loader, reduction="mean"):
     else:
         logger.warning(
             "Weighted loss function is not implemented for graph batching!")
-        if config["hyperparameters"]["weighted_CE"] or config["hyperparameters"]["weighted_BCE"]:
+        if config["hyperparameters"]["weighted_CE"] or config[
+                "hyperparameters"]["weighted_BCE"]:
             raise NotImplementedError
 
     if dataset_config["task_type"] == "single-label-NC":
@@ -67,7 +101,8 @@ def get_loss_fn(config, loader, reduction="mean"):
             pos_weight = get_pos_weight_for_BCEWithLogitsLoss(data)
         else:
             pos_weight = None
-        return torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction=reduction)
+        return torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight,
+                                          reduction=reduction)
 
     elif dataset_config["task_type"] == "single-label-EC":
         if config["hyperparameters"]["weighted_CE"]:
@@ -77,7 +112,19 @@ def get_loss_fn(config, loader, reduction="mean"):
         return torch.nn.CrossEntropyLoss(weight=weight, reduction=reduction)
 
 
-def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0, reverse_mp=False, f1_average="micro"):
+def node_classification_step(mode: str,
+                             epoch,
+                             loader,
+                             model,
+                             loss_fn,
+                             optimizer,
+                             enable_tqdm,
+                             sampling_strategy,
+                             device="cpu",
+                             multilabel=False,
+                             threshold=0,
+                             reverse_mp=False,
+                             f1_average="micro"):
     total_loss = 0
     total_num = 0
     predictions = []
@@ -124,7 +171,7 @@ def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer
     predictions = torch.cat(predictions, dim=0).detach().cpu().numpy()
     truths = torch.cat(truths, dim=0).detach().numpy()
 
-    avg_loss = total_loss/total_num
+    avg_loss = total_loss / total_num
     mlflow.log_metric(f"{mode} loss", avg_loss, epoch)
 
     f1 = f1_score(truths, predictions, average=f1_average)
@@ -133,7 +180,19 @@ def node_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer
     return avg_loss, f1, predictions, truths
 
 
-def edge_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer, enable_tqdm, sampling_strategy, device="cpu", multilabel=False, threshold=0, reverse_mp=False, f1_average="binary"):
+def edge_classification_step(mode: str,
+                             epoch,
+                             loader,
+                             model,
+                             loss_fn,
+                             optimizer,
+                             enable_tqdm,
+                             sampling_strategy,
+                             device="cpu",
+                             multilabel=False,
+                             threshold=0,
+                             reverse_mp=False,
+                             f1_average="binary"):
 
     total_loss = 0
     total_num = 0
@@ -181,7 +240,7 @@ def edge_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer
     predictions = torch.cat(predictions, dim=0).detach().cpu().numpy()
     truths = torch.cat(truths, dim=0).detach().numpy()
 
-    avg_loss = total_loss/total_num
+    avg_loss = total_loss / total_num
     mlflow.log_metric(f"{mode} loss", avg_loss, epoch)
 
     # Note that 1 is the minority class
@@ -191,7 +250,8 @@ def edge_classification_step(mode: str, epoch, loader, model, loss_fn, optimizer
     return avg_loss, f1, predictions, truths
 
 
-def get_run_step(model, loss_fn, optimizer, sampling_strategy, enable_tqdm, device, task_type, reverse_mp, f1_average):
+def get_run_step(model, loss_fn, optimizer, sampling_strategy, enable_tqdm,
+                 device, task_type, reverse_mp, f1_average):
 
     if task_type == "single-label-NC":
         run_step = lambda *args, **kwargs: node_classification_step(
@@ -230,8 +290,7 @@ def get_run_step(model, loss_fn, optimizer, sampling_strategy, enable_tqdm, devi
             device=device,
             reverse_mp=reverse_mp,
             f1_average=f1_average,
-            **kwargs
-        )
+            **kwargs)
     elif task_type == "single-label-EC":
         run_step = lambda *args, **kwargs: edge_classification_step(
             *args,
@@ -245,8 +304,7 @@ def get_run_step(model, loss_fn, optimizer, sampling_strategy, enable_tqdm, devi
             threshold=0,
             reverse_mp=reverse_mp,
             f1_average=f1_average,
-            **kwargs
-        )
+            **kwargs)
     else:
         raise NotImplementedError("Unsupported task type for training.")
 

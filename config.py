@@ -321,7 +321,7 @@ class config:
             "overwrite": {
                 "framework": "inductive",
                 "sampling_strategy": "SAGE",
-                "lr": 0.1,
+                "lr": 5e-3,
                 "weight_decay": 0,
                 "weighted_CE": True,
                 "CE_weight": [1, 6],
@@ -336,7 +336,8 @@ class config:
                 "seed": 118010142,
                 "criterion": "loss",
                 "ibm_split": True,
-                "f1_average": "binary"
+                "f1_average": "binary",
+                "task_type": "single-label-NC",
             },
             "register_info": {
                 "description": "GINe in IBM MultiGNN's paper.",

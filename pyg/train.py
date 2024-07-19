@@ -8,7 +8,7 @@ import numpy as np
 
 from .data_utils import get_loader
 from .model.model_hub import get_model
-from .train_utils import get_loss_fn, get_run_step, get_batch_input
+from .train_utils import get_loss_fn, get_run_step, get_batch_input, get_io_schema
 
 from loguru import logger
 from torch_geometric.nn import summary
@@ -16,7 +16,6 @@ from sklearn.metrics import classification_report
 
 from mlflow import MlflowClient
 from mlflow.models.signature import ModelSignature
-from mlflow.types.schema import Schema, TensorSpec
 
 
 def train_gnn(config):
@@ -151,15 +150,7 @@ def train_gnn(config):
 
     # Save model
     model.load_state_dict(best_model_state_dict)
-    input_schema = Schema(
-        [
-            TensorSpec(np.dtype(np.float32),
-                       (-1, dataset_config["num_node_features"]), "x"),
-            TensorSpec(np.dtype(np.int64), (2, -1), "edge_index")
-        ]
-    )
-    output_schema = Schema(
-        [TensorSpec(np.dtype(np.float32), (-1, dataset_config["num_classes"]))])
+    input_schema, output_schema = get_io_schema(sample_input, dataset_config, reverse_mp)
 
     mlflow.pytorch.log_model(model,
                              model_name,
