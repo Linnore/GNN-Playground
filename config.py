@@ -38,6 +38,7 @@ class config:
         "seed": 118010142,
         "device": "cpu",
         "tqdm": False,
+        "verbose": False,
         "register_model": False,
         "criterion": "loss",
         "num_epochs": 1000,

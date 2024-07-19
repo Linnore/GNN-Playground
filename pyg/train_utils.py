@@ -138,7 +138,7 @@ def node_classification_step(mode: str,
         elif sampling_strategy == "GraphBatching":
             mask = None
 
-        targets = batch.y  # on cpu
+        targets = batch.y.to(device)
         outputs = model(**get_batch_input(batch, reverse_mp, device))
 
         if mask is not None:
@@ -166,7 +166,7 @@ def node_classification_step(mode: str,
 
     # Metrics
     predictions = torch.cat(predictions, dim=0).detach().cpu().numpy()
-    truths = torch.cat(truths, dim=0).detach().numpy()
+    truths = torch.cat(truths, dim=0).detach().cpu().numpy()
 
     avg_loss = total_loss / total_num
     mlflow.log_metric(f"{mode} loss", avg_loss, epoch)
@@ -207,7 +207,7 @@ def edge_classification_step(mode: str,
         elif sampling_strategy == "GraphBatching":
             mask = None
 
-        targets = batch.y  # on cpu
+        targets = batch.y.to(device)
         outputs = model(**get_batch_input(batch, reverse_mp, device))
 
         if mask is not None:
@@ -235,7 +235,7 @@ def edge_classification_step(mode: str,
 
     # Metrics
     predictions = torch.cat(predictions, dim=0).detach().cpu().numpy()
-    truths = torch.cat(truths, dim=0).detach().numpy()
+    truths = torch.cat(truths, dim=0).detach().cpu().numpy()
 
     avg_loss = total_loss / total_num
     mlflow.log_metric(f"{mode} loss", avg_loss, epoch)

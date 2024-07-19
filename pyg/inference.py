@@ -47,7 +47,7 @@ def node_classification_inference(model,
         predictions.append(preds)
 
     # Metrics
-    n_ids = torch.cat(n_ids, dim=0).detach().numpy()
+    n_ids = torch.cat(n_ids, dim=0).detach().cpu().numpy()
     predictions = torch.cat(predictions, dim=0).detach().cpu().numpy()
 
     idx = np.argsort(n_ids)
