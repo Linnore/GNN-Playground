@@ -155,18 +155,18 @@ def node_classification_step(mode: str,
             preds = outputs > threshold
         else:
             preds = outputs.argmax(dim=-1)
-        predictions.append(preds)
-        truths.append(targets)
+        predictions.append(preds.detach().cpu().numpy())
+        truths.append(targets.detach().cpu().numpy())
 
-        loss = loss.detach().cpu()
+        loss = loss.detach().cpu().item()
         num_targets = outputs.numel()
         total_loss += loss * num_targets
         total_num += num_targets
         bar.set_description(f"{mode}_loss={loss:<8.6g}")
 
     # Metrics
-    predictions = torch.cat(predictions, dim=0).detach().cpu().numpy()
-    truths = torch.cat(truths, dim=0).detach().cpu().numpy()
+    predictions = np.concatenate(predictions)
+    truths = np.concatenate(truths)
 
     avg_loss = total_loss / total_num
     mlflow.log_metric(f"{mode} loss", avg_loss, epoch)
@@ -224,18 +224,18 @@ def edge_classification_step(mode: str,
             preds = outputs > threshold
         else:
             preds = outputs.argmax(dim=-1)
-        predictions.append(preds)
-        truths.append(targets)
+        predictions.append(preds.detach().cpu().numpy())
+        truths.append(targets.detach().cpu().numpy())
 
-        loss = loss.detach().cpu()
+        loss = loss.detach().cpu().item()
         num_targets = outputs.numel()
         total_loss += loss * num_targets
         total_num += num_targets
         bar.set_description(f"{mode}_loss={loss:<8.6g}")
 
     # Metrics
-    predictions = torch.cat(predictions, dim=0).detach().cpu().numpy()
-    truths = torch.cat(truths, dim=0).detach().cpu().numpy()
+    predictions = np.concatenate(predictions)
+    truths = np.concatenate(truths)
 
     avg_loss = total_loss / total_num
     mlflow.log_metric(f"{mode} loss", avg_loss, epoch)
