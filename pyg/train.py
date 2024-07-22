@@ -53,7 +53,7 @@ def train_gnn(config):
     model.reset_parameters()
 
     # Setup loss function
-    loss_fn = get_loss_fn(config, train_loader, reduction='mean')
+    loss_fn = get_loss_fn(config, train_loader, reduction='mean').to(device)
     logger.info(f"Loss function: {loss_fn}")
 
     # Setup save directory for optimizer states
