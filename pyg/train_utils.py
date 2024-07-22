@@ -109,6 +109,23 @@ def get_loss_fn(config, loader, reduction="mean"):
         return torch.nn.CrossEntropyLoss(weight=weight, reduction=reduction)
 
 
+def infer_licit_x(edge_index, edge_label):
+    pass
+
+
+def node_metrics_for_node_readout():
+    pass
+
+
+def node_metrics_for_edge_readout(truth_e, prediction_e, f1_average="binary"):
+
+    pass
+
+
+def edge_metrics_for_edge_readout():
+    pass
+
+
 def node_classification_step(mode: str,
                              epoch,
                              loader,
@@ -189,7 +206,8 @@ def edge_classification_step(mode: str,
                              multilabel=False,
                              threshold=0,
                              reverse_mp=False,
-                             f1_average="binary"):
+                             f1_average="binary",
+                             use_node_metrics=False):
 
     total_loss = 0
     total_num = 0
@@ -241,7 +259,14 @@ def edge_classification_step(mode: str,
     mlflow.log_metric(f"{mode} loss", avg_loss, epoch)
 
     # Note that 1 is the minority class
-    f1 = f1_score(truths, predictions, average=f1_average)
+    if use_node_metrics:
+        f1 = node_metrics_for_edge_readout(
+            truths,
+            predictions,
+            average=f1_average)
+    else:
+        f1 = edge_metrics_for_edge_readout()
+        f1 = f1_score(truths, predictions, average=f1_average)
     mlflow.log_metric(f"{mode} F1", f1, epoch)
 
     return avg_loss, f1, predictions, truths
