@@ -13,6 +13,7 @@ class config:
     mode = None  # Will be overwritten as train/inference by command line.
     model = None  # Must be one of the model in model_collections
     dataset = None  # Must be one of the dataset in dataset_collections
+    dataset_dir = "./dataset"  # Local directory to save datasets.
 
     # MLflow tracking server configrations
     mlflow_config = {
@@ -363,7 +364,50 @@ class config:
             "reverse_mp": False,
             "layer_mix": "None",
             "model_mix": "Mean",
-        }
+        },
+        "PNAe-in": {
+            "base_model": "PNAe",
+            "overwrite": {
+                "framework": "inductive",
+                "sampling_strategy": "SAGE",
+                "lr": 5e-3,
+                "weight_decay": 0,
+                "weighted_CE": True,
+                "CE_weight": [1, 6],
+                "num_epochs": 200,
+                "patience": 20,
+                "batch_size": 8192,
+                "add_time_stamp": True,
+                "add_egoID": True,
+                "add_port": True,
+                "add_time_delta": False,
+                "batch_norm": True,
+                "seed": 1,
+                "criterion": "loss",
+                "ibm_split": True,
+                "f1_average": "binary"
+            },
+            "register_info": {
+                "description": "PNAe in IBM MultiGNN's paper.",
+                "tags": {
+                    "add_time_stamp": "will be overwritten",
+                    "add_egoID": "will be overwritten",
+                    "add_port": "will be overwritten",
+                    "add_time_delta": "will be overwritten",
+                    "batch_norm": "will be overwritten",
+                    "ibm_split": "will be overwritten",
+                }
+            },
+            "hidden_channels": 65,
+            "num_layers": 2,
+            "num_neighbors": [100, 100],
+            "edge_update": True,
+            "dropout": 0.1,
+            "batch_norm": "will be overwritten",
+            "reverse_mp": False,
+            "layer_mix": "None",
+            "model_mix": "Mean",
+        },
     }
 
     # Dataset collections

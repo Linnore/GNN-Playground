@@ -20,38 +20,40 @@ def merge_from_data_list(data_list):
 
 
 def get_data_SAGE(config):
+    dataset_dir = config["dataset_dir"]
     dataset_transform = T.Compose([T.NormalizeFeatures()])
     batch_transform = None
 
     dataset = config["dataset"]
     if dataset in ['Cora', 'CiteSeer', 'PubMed']:
         from torch_geometric.datasets import Planetoid
-        dataset = Planetoid('dataset',
+        dataset = Planetoid(dataset_dir,
                             dataset,
                             split='public',
                             transform=dataset_transform)
     elif dataset == "Reddit":
         from torch_geometric.datasets import Reddit
-        dataset = Reddit('dataset/Reddit', transform=dataset_transform)
+        dataset = Reddit(f'{dataset_dir}/Reddit', transform=dataset_transform)
     elif dataset == "Reddit2":
         from torch_geometric.datasets import Reddit2
-        dataset = Reddit2('dataset/Reddit2', transform=dataset_transform)
+        dataset = Reddit2(f'{dataset_dir}/Reddit2',
+                          transform=dataset_transform)
     elif dataset == "Flickr":
         from torch_geometric.datasets import Flickr
-        dataset = Flickr('dataset/Flickr', transform=dataset_transform)
+        dataset = Flickr(f'{dataset_dir}/Flickr', transform=dataset_transform)
     elif dataset == " Yelp":
         from torch_geometric.datasets import Yelp
-        dataset = Yelp('dataset/Yelp', transform=dataset_transform)
+        dataset = Yelp(f'{dataset_dir}/Yelp', transform=dataset_transform)
     elif dataset == "AmazonProducts":
         from torch_geometric.datasets import AmazonProducts
-        dataset = AmazonProducts('dataset/AmazonProducts',
+        dataset = AmazonProducts(f'{dataset_dir}/AmazonProducts',
                                  transform=dataset_transform)
     elif dataset == "PPI":
         from torch_geometric.datasets import PPI
         dataset = [
-            merge_from_data_list(PPI('dataset/PPI', split='train')),
-            merge_from_data_list(PPI('dataset/PPI', split='val')),
-            merge_from_data_list(PPI('dataset/PPI', split='test')),
+            merge_from_data_list(PPI(f'{dataset_dir}/PPI', split='train')),
+            merge_from_data_list(PPI(f'{dataset_dir}/PPI', split='val')),
+            merge_from_data_list(PPI(f'{dataset_dir}/PPI', split='test')),
         ]
     elif dataset.startswith("AMLworld"):
         AMLworld_config = config["AMLworld_config"]
@@ -74,7 +76,7 @@ def get_data_SAGE(config):
         dataset = []
         for split in ["train", "val", "test"]:
             dataset.append(
-                AMLworld('dataset/AMLworld',
+                AMLworld(f'{dataset_dir}/AMLworld',
                          opt=option,
                          split=split,
                          load_time_stamp=AMLworld_config["add_time_stamp"],
@@ -179,10 +181,8 @@ def get_data_SAGE(config):
 
     if config["model_config"].get("reverse_mp", False):
         if train_data.is_undirected():
-            raise ValueError(
-                "Reverse message passing should not be "
-                "applied on undirected graph."
-            )
+            raise ValueError("Reverse message passing should not be "
+                             "applied on undirected graph.")
         for data in [train_data, val_data, test_data]:
             if not hasattr(data, "rev_edge_attr"):
                 if hasattr(data, "edge_attr"):
@@ -222,12 +222,13 @@ def get_data_SAINT(config):
 
 
 def get_data_graph_batch(config):
+    dataset_dir = config["dataset_dir"]
     batch_transform = None
     if config["dataset"] == "PPI":
         from torch_geometric.datasets import PPI
-        train_dataset = PPI('dataset/PPI', split='train')
-        val_dataset = PPI('dataset/PPI', split='val')
-        test_dataset = PPI('dataset/PPI', split='test')
+        train_dataset = PPI(f'{dataset_dir}/PPI', split='train')
+        val_dataset = PPI(f'{dataset_dir}/PPI', split='val')
+        test_dataset = PPI(f'{dataset_dir}/PPI', split='test')
 
     return train_dataset, val_dataset, test_dataset, batch_transform
 
@@ -245,10 +246,8 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
 
     general_config = config["general_config"]
 
-    logger.info(
-        f"\ntrain_data={train_data}\n"
-        f"val_data={val_data}\ntest_data={test_data}"
-    )
+    logger.info(f"\ntrain_data={train_data}\n"
+                f"val_data={val_data}\ntest_data={test_data}")
 
     task_type = config["dataset_config"]["task_type"]
     if task_type in ["single-label-NC", "multi-label-NC"]:
@@ -266,8 +265,7 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             logger.warning(
                 "sample_when_predict is set to be False. All neighbors will "
                 "be used for aggregation when doing prediction in validation "
-                "and testing."
-            )
+                "and testing.")
             num_neighbors = [-1] * model_config["num_layers"]
 
         val_loader = NeighborLoader(
@@ -326,15 +324,11 @@ def get_loader_SAINT(data: Data, config):
 
 
 def get_loader_no_sampling(train_data, val_data, test_data, transform, config):
-    logger.warning(
-        "Sampling strategy is set to be None. Full graph will be "
-        "used without mini-batching! Batch_size is ignored!"
-    )
+    logger.warning("Sampling strategy is set to be None. Full graph will be "
+                   "used without mini-batching! Batch_size is ignored!")
 
-    logger.info(
-        f"\ntrain_data={train_data}\n"
-        f"val_data={val_data}\ntest_data={test_data}"
-    )
+    logger.info(f"\ntrain_data={train_data}\n"
+                f"val_data={val_data}\ntest_data={test_data}")
 
     if transform:
         train_data = transform(train_data)
@@ -475,11 +469,9 @@ def get_inference_loader_SAGE(infer_data: Data, transform, config: dict):
     logger.info(f"\ninference_data={infer_data}")
 
     if not general_config["sample_when_predict"]:
-        logger.warning(
-            "sample_when_predict is set to be False. "
-            "All neighbors will be used for aggregation "
-            "when doing prediction in validation and testing."
-        )
+        logger.warning("sample_when_predict is set to be False. "
+                       "All neighbors will be used for aggregation "
+                       "when doing prediction in validation and testing.")
         num_neighbors = [-1] * model_config["num_layers"]
 
     infer_loader = NeighborLoader(
@@ -501,11 +493,9 @@ def get_inference_loader_SAINT(data: Data, config: dict):
 
 def get_inference_loader_no_sampling(infer_data: Data, transform,
                                      config: dict):
-    logger.warning(
-        "Sampling strategy is set to be None. "
-        "Full graph will be used without mini-batching! "
-        "Batch_size is ignored!"
-    )
+    logger.warning("Sampling strategy is set to be None. "
+                   "Full graph will be used without mini-batching! "
+                   "Batch_size is ignored!")
 
     logger.info(f"\ninference_data={infer_data}")
 
