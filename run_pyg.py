@@ -20,7 +20,7 @@ def main():
     config = update_config(dict(vars(config)), vars(args))
 
     # Setup logger
-    setup_logger(args)
+    setup_logger(args, config)
 
     # Setup MLflow
     setup_mlflow(config)

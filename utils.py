@@ -7,6 +7,7 @@ import sys
 import torch
 
 from loguru import logger
+from datetime import datetime
 
 
 def add_train_parser(subparsers: argparse._SubParsersAction,
@@ -279,20 +280,16 @@ def setup_mlflow(config):
                                 auth=(mlflow_config["username"],
                                       mlflow_config["password"]))
         if (response.status_code == 200):
-            logger.success(
-                f"Successfully logged in to the MLFlow server "
-                f"at {mlflow_config['tracking_uri']} as "
-                f"{mlflow_config['username']}."
-            )
+            logger.success(f"Successfully logged in to the MLFlow server "
+                           f"at {mlflow_config['tracking_uri']} as "
+                           f"{mlflow_config['username']}.")
 
             os.environ["MLFLOW_TRACKING_USERNAME"] = mlflow_config['username']
             os.environ["MLFLOW_TRACKING_PASSWORD"] = mlflow_config['password']
 
         else:
-            raise NotImplementedError(
-                "Failed to log in to the MLFlow server "
-                f"at {mlflow_config['tracking_uri']}!"
-            )
+            raise NotImplementedError("Failed to log in to the MLFlow server "
+                                      f"at {mlflow_config['tracking_uri']}!")
 
 
 def init_config():
@@ -346,7 +343,7 @@ def overwrite_config_from_vargs(config: dict, vargs: dict):
     return config
 
 
-def setup_logger(args):
+def setup_logger(args, config: dict):
     if not args.debug:
         logger.remove(0)
         logger.add(sys.stderr, level="INFO")
@@ -356,5 +353,9 @@ def setup_logger(args):
     if not os.path.exists(tmp_dir):
         os.makedirs(tmp_dir)
 
-    logger.add(os.path.join(log_dir, "log_{time:YYYY-MM-DD-HH_mm}.txt"),
-               rotation='10 MB')
+    now = datetime.now()
+    time_str = now.strftime("%Y-%m-%d-%H_%M")
+    log_file = os.path.join(log_dir, f"log_{time_str}.txt")
+
+    logger.add(log_file, rotation='10 MB')
+    config["terminal_log_file"] = log_file

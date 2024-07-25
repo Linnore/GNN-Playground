@@ -155,7 +155,7 @@ def node_classification_step(mode: str,
         elif sampling_strategy == "GraphBatching":
             mask = None
 
-        targets = batch.y.to(device)
+        targets = batch.y.to(device).long()
         outputs = model(**get_batch_input(batch, reverse_mp, device))
 
         if mask is not None:
@@ -225,7 +225,7 @@ def edge_classification_step(mode: str,
         elif sampling_strategy == "GraphBatching":
             mask = None
 
-        targets = batch.y.to(device)
+        targets = batch.y.to(device).long()
         outputs = model(**get_batch_input(batch, reverse_mp, device))
 
         if mask is not None:

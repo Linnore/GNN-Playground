@@ -171,6 +171,8 @@ One can delete the experiments and runs using the MLflow UI. However, this would
 ```bash
 
 export MLFLOW_TRACKING_URI=http://127.0.0.1:8080
+export MLFLOW_TRACKING_USERNAME=admin
+export MLFLOW_TRACKING_PASSWORD=password
 mlflow gc
 ```
 

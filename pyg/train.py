@@ -191,5 +191,6 @@ def train_gnn(config):
     with open("logs/tmp/test_report.txt", "w") as out_file:
         out_file.write(best_report)
     mlflow.log_artifact("logs/tmp/test_report.txt")
+    mlflow.log_artifact(config["terminal_log_file"])
 
     mlflow.end_run()
