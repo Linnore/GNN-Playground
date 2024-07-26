@@ -9,10 +9,9 @@ import pandas as pd
 
 from typing import Literal
 from datetime import datetime
-from typing import Union
 from tqdm import tqdm
 
-from torch_geometric.data import InMemoryDataset, Data, HeteroData
+from torch_geometric.data import InMemoryDataset, Data
 from torch_geometric.typing import OptTensor
 from torch_geometric.transforms import BaseTransform
 
@@ -152,22 +151,13 @@ class AddEgoIds_for_LinkNeighborLoader(BaseTransform):
     def __init__(self):
         pass
 
-    def __call__(self, data: Union[Data, HeteroData]):
-        x = data.x if not isinstance(data, HeteroData) else data['node'].x
+    def __call__(self, data: Data):
+        x = data.x
         device = x.device
         ids = torch.zeros((x.shape[0], 1), device=device)
-        if not isinstance(data, HeteroData):
-            nodes = torch.unique(data.edge_label_index.view(-1)).to(device)
-        else:
-            nodes = torch.unique(
-                data['node', 'to',
-                     'node'].edge_label_index.view(-1)).to(device)
+        nodes = torch.unique(data.edge_label_index.view(-1)).to(device)
         ids[nodes] = 1
-        if not isinstance(data, HeteroData):
-            data.x = torch.cat([x, ids], dim=1)
-        else:
-            data['node'].x = torch.cat([x, ids], dim=1)
-
+        data.x = torch.cat([x, ids], dim=1)
         return data
 
 
@@ -656,7 +646,7 @@ class AMLworld(InMemoryDataset):
         val_data.information = information
         val_data.edge_features_colID = edge_features_colID
         val_data.val_mask = torch.zeros(val_data.num_edges, dtype=torch.bool)
-        val_data.val_mask[val_inds.long()] = True
+        val_data.val_mask[-val_inds.shape[0]] = True
         if self.pre_filter is not None:
             val_data = self.pre_filter(val_data)
         if self.pre_transform is not None:
@@ -685,7 +675,7 @@ class AMLworld(InMemoryDataset):
         te_data.information = information
         te_data.edge_features_colID = edge_features_colID
         te_data.test_mask = torch.zeros(te_data.num_edges, dtype=torch.bool)
-        te_data.test_mask[te_inds.long()] = True
+        te_data.test_mask[-te_inds.shape[0]] = True
         if self.pre_filter is not None:
             te_data = self.pre_filter(te_data)
         if self.pre_transform is not None:

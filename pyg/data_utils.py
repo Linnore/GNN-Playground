@@ -262,6 +262,7 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             num_workers=general_config["num_workers"],
             persistent_workers=general_config["persistent_workers"],
             transform=transform,
+            shuffle=True
         )
 
         if not general_config["sample_when_predict"]:
@@ -299,6 +300,7 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             edge_label_index=train_data.edge_index[:, train_data.train_mask],
             edge_label=train_data.y[train_data.train_mask],
             transform=transform,
+            shuffle=True
         )
 
         val_loader = LinkNeighborLoader(
