@@ -60,35 +60,48 @@ class config:
         "weighted_BCE": False,  # Only useful for multi-label task.
     }
     """Options for difference experiment settings
+    `framework`
+        `"transductive"`:
+            The data split will follow a transductive manner.
+            All edges are presented in any phase (train; val; test). However,
+            only the training nodes/edges can be used to compute the loss value
+            and do backward propergation in the training phase.
 
-    transductive:
-        The data split will follow a transductive manner.
-        Training nodes can connected with validation nodes or testing nodes,
-        though backward propogation is only applied on the loss computed by
-        the training nodes.
+        `"inductive"`:
+            - If `sampling_strategy` is `"SAGE"`,
+                `SAGE_inductive_option`:
+                -  `"default"` or `"strict"`
+                    The data will be split to train_subgraph, val_subgraph,
+                    and test_subgraph. No message passing across the train,
+                    val, and test datasets is allowed.
+                -  `soft`:
+                    The train_subgraph only contains the training nodes/edges
+                    as in the strict option. However, the val_subgraph includes
+                    the training nodes & edges, validation nodes & edges, and
+                    messages between the training nodes and validation nodes,
+                    which means train_subgraph is a proper subgraph of the
+                    val_subgraph. Similarly, test_subgraph contains
+                    train_subgraph, val_subgraph, and all messages among
+                    training nodes, validation nodes, and testing nodes.
+                    For each of the above subgraphs, train_mask, val_mask,
+                    and test_mask should be provided.
+                    E.g., val.train_mask is 0 for all nodes/edges.
+                    val_subgraph.val_mask is 1 for all validation nodes/edges,
+                    and is 0 for all training and testing nodes/edges.
+                    val_subgraph.test_mask is 0 for all nodes/edges.
 
-    inductive:
-        - If sampling_strategy is "SAGE":
-            -  default or strict
-                The data will be split to train_subgraph, val_subgraph,
-                and test_subgraph. No message passing across the train,
-                val, and test datasets is allowed.
-            -  soft:
-                Training nodes are cut off from validation nodes and testing
-                nodes to form a training subgraph. However, when doing
-                inference on the validation nodes and testing nodes,
-                the edges  <Node_train, Node_val/Node_test>  and
-                <Node_val, Node_test> can be used.
-        - If sampling_strategy is "SAINT"
-            TODO
-        - If sampling_strategy is "None". string("None")!!!
-            This should only happen when the framework is transductive.
-            All neighbors will be used, so the model behaves like GCN.
-        - If sampling_strategy is "GraphBatching":
-            Graph-level batching. This option is useful for dataset
-            containing multiple graphs. Each graph will be regarded
-            as one batch-element as a whole. E.g., batch_size = 2 will give
-            each batch containing 2 graphs.
+            - If `sampling_strategy` is `"SAINT"`
+                TODO
+
+            - If `sampling_strategy` is `"None"`. string(`"None"`)!!!
+                One batch for each split. All neighbors will be used,
+                so the model behaves like GCN.
+
+            - If `sampling_strategy` is `"GraphBatching"`:
+                Graph-level batching. This option is useful for dataset
+                containing multiple graphs. Each graph will be regarded
+                as one batch-element as a whole. E.g., batch_size = 2 will give
+                each batch containing 2 graphs.
     """
     framework_options = ["transductive", "inductive"]
     sampling_strategy_options = [
@@ -317,7 +330,7 @@ class config:
             "edge_update": True,
             "dropout": 0.1,
             "batch_norm": "will be overwritten",
-            "reverse_mp": False,
+            "reverse_mp": True,
             "layer_mix": "None",
             "model_mix": "Mean",
         },

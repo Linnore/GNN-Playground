@@ -25,6 +25,22 @@ def get_batch_input(batch, reverse_mp, device):
     return input_dict
 
 
+def append_source_edges(batch, mask_not_in_batch, data):
+    batch.edge_index = torch.hstack(
+        (batch.edge_index, batch.edge_label_index[:, mask_not_in_batch]))
+    batch.y = torch.hstack((batch.y, batch.edge_label[mask_not_in_batch]))
+
+    # Retrieve edge attributes from the hole data object
+    missing_input_id = batch.input_id[mask_not_in_batch]
+    if hasattr(batch, 'edge_attr') and batch.edge_attr is not None:
+        batch.edge_attr = torch.vstack(
+            (batch.edge_attr, data.edge_attr[missing_input_id]))
+        if hasattr(batch, "rev_edge_attr"):
+            batch.rev_edge_attr = torch.vstack(
+                (batch.rev_edge_attr, data.rev_edge_attr[missing_input_id]))
+    batch.num_appended = missing_input_id.shape[0]
+
+
 def get_io_schema(sample_input: dict, dataset_config: dict, reverse_mp):
     input_list = [
         TensorSpec(np.dtype(np.float32),
@@ -219,7 +235,18 @@ def edge_classification_step(mode: str,
             optimizer.zero_grad()
 
         if sampling_strategy == "SAGE":
+            # Get edges in batch that are source edges
             mask = torch.isin(batch.e_id, batch.input_id)
+            in_batch_input_id = batch.e_id[mask]
+
+            # Get source edges that are not in batch
+            mask_not_in_batch = ~torch.isin(batch.input_id, in_batch_input_id)
+
+            # Append source edges that are not in batch to the batch
+            append_source_edges(batch, mask_not_in_batch, loader.data)
+            mask = torch.hstack(
+                (mask, torch.ones(batch.num_appended, dtype=torch.bool)))
+
         elif sampling_strategy in [None, "None"]:
             mask = eval(f"batch.{mode}_mask")
         elif sampling_strategy == "GraphBatching":
@@ -260,10 +287,9 @@ def edge_classification_step(mode: str,
 
     # Note that 1 is the minority class
     if use_node_metrics:
-        f1 = node_metrics_for_edge_readout(
-            truths,
-            predictions,
-            average=f1_average)
+        f1 = node_metrics_for_edge_readout(truths,
+                                           predictions,
+                                           average=f1_average)
     else:
         f1 = edge_metrics_for_edge_readout()
         f1 = f1_score(truths, predictions, average=f1_average)

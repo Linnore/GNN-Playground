@@ -128,7 +128,7 @@ def get_data_SAGE(config):
                     logger.info(
                         "Using data split for non-strict inductive learning.")
                     train_data = data.subgraph(data.train_mask)
-                    val_data = data
+                    val_data = data.subgraph(data.train_mask | data.val_mask)
                     test_data = data
 
         # For dataset with splits as different graphs
@@ -164,17 +164,20 @@ def get_data_SAGE(config):
                     logger.info(
                         "Using data split for non-strict inductive learning.")
                     train_data = data.edge_subgraph(data.train_mask)
-                    val_data = data
+                    val_data = data.subgraph(data.train_mask | data.val_mask)
                     test_data = data
 
         # For dataset with splits as different graphs
         else:
             train_data, val_data, test_data = dataset
-
-            train_data.train_mask = torch.ones(train_data.num_edges,
-                                               dtype=bool)
-            val_data.val_mask = torch.ones(val_data.num_edges, dtype=bool)
-            test_data.test_mask = torch.ones(test_data.num_edges, dtype=bool)
+            if not hasattr(train_data, "train_mask"):
+                train_data.train_mask = torch.ones(train_data.num_edges,
+                                                   dtype=bool)
+            if not hasattr(val_data, "val_mask"):
+                val_data.val_mask = torch.ones(val_data.num_edges, dtype=bool)
+            if not hasattr(test_data, "test_mask"):
+                test_data.test_mask = torch.ones(test_data.num_edges,
+                                                 dtype=bool)
 
     else:
         raise NotImplementedError("Unsupported task type!")
@@ -294,7 +297,7 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             num_neighbors=num_neighbors,
             batch_size=params["batch_size"],
             edge_label_index=train_data.edge_index[:, train_data.train_mask],
-            edge_label=train_data.y,
+            edge_label=train_data.y[train_data.train_mask],
             transform=transform,
         )
 
@@ -303,7 +306,7 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             num_neighbors=num_neighbors,
             batch_size=params["batch_size"],
             edge_label_index=val_data.edge_index[:, val_data.val_mask],
-            edge_label=val_data.y,
+            edge_label=val_data.y[val_data.val_mask],
             transform=transform,
         )
 
@@ -312,7 +315,7 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             num_neighbors=num_neighbors,
             batch_size=params["batch_size"],
             edge_label_index=test_data.edge_index[:, test_data.test_mask],
-            edge_label=test_data.y,
+            edge_label=test_data.y[test_data.test_mask],
             transform=transform,
         )
 

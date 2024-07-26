@@ -1,15 +1,14 @@
+import argparse
 import os
 import datatable
 import itertools
 import torch
-import psutil
 
 import numpy as np
 import pandas as pd
 
 from typing import Literal
 from datetime import datetime
-from loguru import logger
 from typing import Union
 from tqdm import tqdm
 
@@ -209,7 +208,7 @@ class AMLworld(InMemoryDataset):
                  pre_fileter=None,
                  force_download=False,
                  verbose=True,
-                 ibm_split=False,
+                 ibm_split=True,
                  readout: Literal['edge', 'node'] = 'edge',
                  *args,
                  **kwargs):
@@ -225,6 +224,13 @@ class AMLworld(InMemoryDataset):
 
         if not verbose:
             os.environ["TQDM_DISABLE"] = "1"
+        else:
+            try:
+                from loguru import logger
+                self.logger = logger
+            except ImportError:
+                import logging
+                self.logger = logging
 
         all_options = [
             "HI-Small", "HI-Medium", "HI-Large", "LI-Small", "LI-Medium",
@@ -265,9 +271,9 @@ class AMLworld(InMemoryDataset):
         self._data.edge_features_colID = feature_newID
 
         if not self.processed_in_this_call and self.verbose:
-            logger.info(self._data.information)
+            self.logger.info(self._data.information)
             edge_features = list(feature_newID.keys())
-            logger.info(f'Edge features being used: {edge_features}')
+            self.logger.info(f'Edge features being used: {edge_features}')
             del self._data.information
 
         # Select the labels to returen
@@ -431,7 +437,7 @@ class AMLworld(InMemoryDataset):
                                    'Payment Format', 'Is Laundering'
                                ])
         if self.verbose:
-            logger.info(
+            self.logger.info(
                 f'Available Edge Features: {df_edges.columns.tolist()}')
 
         df_edges['Timestamp'] = df_edges['Timestamp'] - \
@@ -460,9 +466,9 @@ class AMLworld(InMemoryDataset):
                               f"= {df_nodes.shape[0]}")
         infor_str_list.append(f"Number of transactions = {df_edges.shape[0]}")
         if self.verbose:
-            logger.info(infor_str_list[-3])
-            logger.info(infor_str_list[-2])
-            logger.info(infor_str_list[-1])
+            self.logger.info(infor_str_list[-3])
+            self.logger.info(infor_str_list[-2])
+            self.logger.info(infor_str_list[-1])
 
         # Define Node and Edge
         edge_features = [
@@ -488,7 +494,7 @@ class AMLworld(InMemoryDataset):
         infor_str_list.append("Number of days and transactions in the data: "
                               f"{n_days} days, {n_samples} transactions")
         if self.verbose:
-            logger.info(infor_str_list[-1])
+            self.logger.info(infor_str_list[-1])
 
         # Data splitting
         # irs = illicit ratios, inds = indices, trans = transactions
@@ -532,7 +538,7 @@ class AMLworld(InMemoryDataset):
             list(range(j, len(daily_totals)))
         ]
         if self.verbose:
-            logger.info(f'Calculate split: {split}')
+            self.logger.info(f'Calculate split: {split}')
 
         # Now, we seperate the transactions based on their
         # indices in the timestamp array
@@ -563,9 +569,9 @@ class AMLworld(InMemoryDataset):
             f"{y[te_inds].float().mean() * 100:.2f}% || "
             f"Test days: {split[2]}")
         if self.verbose:
-            logger.info(infor_str_list[-3])
-            logger.info(infor_str_list[-2])
-            logger.info(infor_str_list[-1])
+            self.logger.info(infor_str_list[-3])
+            self.logger.info(infor_str_list[-2])
+            self.logger.info(infor_str_list[-1])
 
         # Creating the final data objects
         tr_x, val_x, te_x = x, x, x
@@ -573,12 +579,6 @@ class AMLworld(InMemoryDataset):
         if self.ibm_split:
             e_val = np.concatenate([tr_inds, val_inds])
             e_te = np.arange(edge_attr.shape[0])
-            try:
-                logger.warning("Following IBM's repo, "
-                               "all edges are considered in test set. ")
-            except Exception:
-                print("Warning: Following IBM's repo, "
-                      "all edges are considered in test set.")
         else:
             e_val = val_inds.numpy()
             e_te = te_inds.numpy()
@@ -588,7 +588,7 @@ class AMLworld(InMemoryDataset):
             'Node features being used: '
             f'{node_features} ("Feature" is a placeholder feature of all 1s)')
         if self.verbose:
-            logger.info(infor_str_list[-1])
+            self.logger.info(infor_str_list[-1])
 
         # Edge features to normalize
         edge_features.extend(["In-Port", "Out-Port"])
@@ -605,8 +605,6 @@ class AMLworld(InMemoryDataset):
         # Compute and save data objects
         file_dict = self.processed_file_paths_by_split
 
-        logger.debug(
-            f'Before RAM Used (GB):, {psutil.virtual_memory()[3]/1000000000}')
         tr_edge_index = edge_index[:, e_tr]
         tr_edge_attr = edge_attr[e_tr]
         tr_y = y[e_tr]
@@ -627,19 +625,15 @@ class AMLworld(InMemoryDataset):
         information = "\n".join(infor_str_list)
         tr_data.information = information
         tr_data.edge_features_colID = edge_features_colID
+        tr_data.train_mask = torch.ones(tr_data.num_edges, dtype=torch.bool)
         if self.pre_filter is not None:
             tr_data = self.pre_filter(tr_data)
         if self.pre_transform is not None:
             tr_data = self.pre_transform(tr_data)
         torch.save(tr_data, file_dict["train"])
-        logger.debug(
-            f'RAM Used (GB):, {psutil.virtual_memory()[3]/1000000000}')
 
         del (tr_x, tr_edge_attr, tr_edge_index, tr_edge_times, tr_inds, tr_y,
              e_tr, tr_data)
-
-        logger.debug(
-            f'After RAM Used (GB):, {psutil.virtual_memory()[3]/1000000000}')
 
         val_edge_index = edge_index[:, e_val]
         val_edge_attr = edge_attr[e_val]
@@ -661,17 +655,16 @@ class AMLworld(InMemoryDataset):
                                                                     norm_col])
         val_data.information = information
         val_data.edge_features_colID = edge_features_colID
+        val_data.val_mask = torch.zeros(val_data.num_edges, dtype=torch.bool)
+        val_data.val_mask[val_inds.long()] = True
         if self.pre_filter is not None:
             val_data = self.pre_filter(val_data)
         if self.pre_transform is not None:
             val_data = self.pre_transform(val_data)
         torch.save(val_data, file_dict["val"])
-        logger.debug(
-            f'RAM Used (GB):, {psutil.virtual_memory()[3]/1000000000}')
         del (val_x, val_edge_attr, val_edge_index, val_edge_times, val_inds,
              val_y, e_val, val_data)
 
-        # TODO: Check why te_inds is not used!
         te_edge_index = edge_index[:, e_te]
         te_edge_attr = edge_attr[e_te]
         te_y = y[e_te]
@@ -691,6 +684,8 @@ class AMLworld(InMemoryDataset):
         te_data.edge_attr[:, norm_col] = z_norm(te_data.edge_attr[:, norm_col])
         te_data.information = information
         te_data.edge_features_colID = edge_features_colID
+        te_data.test_mask = torch.zeros(te_data.num_edges, dtype=torch.bool)
+        te_data.test_mask[te_inds.long()] = True
         if self.pre_filter is not None:
             te_data = self.pre_filter(te_data)
         if self.pre_transform is not None:
@@ -719,8 +714,59 @@ class AMLworld(InMemoryDataset):
 
 
 def main():
-    dataset = AMLworld("./dataset/AMLworld")
-    print(dataset[0])
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("dataset_dir",
+                        help="E.g. `path_of_GNN-Playground/dataset/AMLworld`")
+    parser.add_argument("-s", "--small", action="store_true")
+    parser.add_argument("-m", "--medium", action="store_true")
+    parser.add_argument("-l", "--large", action="store_true")
+    parser.add_argument('-i',
+                        "--ibm_split",
+                        action=argparse.BooleanOptionalAction,
+                        default=True)
+    parser.add_argument('-n', "--no_ibm_split", action="store_true")
+    parser.add_argument('-f', "--force_reload", action="store_true")
+
+    args = parser.parse_args()
+    dataset_dir = args.dataset_dir
+
+    opt_list = []
+    if args.small:
+        opt_list.extend(["HI-Small", "LI-Small"])
+    if args.medium:
+        opt_list.extend(["HI-Medium", "LI-Medium"])
+    if args.large:
+        opt_list.extend(["HI-Large", "LI-Large"])
+
+    print("Generating the AMLworld dataset with the following option:")
+    print(opt_list)
+    print(f"Force reload: {args.force_reload}")
+    print("Split:", "ibm_split" if args.ibm_split else None,
+          "strict inductive split" if args.no_ibm_split else None)
+
+    for opt in opt_list:
+        if args.no_ibm_split:
+            print("--------------------------------------------------")
+            print(f"{opt}, ibm_split=False")
+            print("--------------------------------------------------")
+            dataset = AMLworld(dataset_dir,
+                               opt=opt,
+                               ibm_split=False,
+                               verbose=True,
+                               force_reload=args.force_reload)
+            print()
+        if args.ibm_split:
+            print("--------------------------------------------------")
+            print(f"{opt}, ibm_split=True")
+            print("--------------------------------------------------")
+            dataset = AMLworld(dataset_dir,
+                               opt=opt,
+                               ibm_split=True,
+                               verbose=True,
+                               force_reload=args.force_reload)
+            print()
+    dataset
 
 
 if __name__ == "__main__":
