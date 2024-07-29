@@ -355,7 +355,7 @@ def setup_logger(args, config: dict):
 
     now = datetime.now()
     time_str = now.strftime("%Y-%m-%d-%H_%M")
-    log_file = os.path.join(log_dir, f"log_{time_str}.txt")
+    log_file = os.path.join(log_dir, f"log_{time_str}.log")
 
     logger.add(log_file, rotation='10 MB')
     config["terminal_log_file"] = log_file
