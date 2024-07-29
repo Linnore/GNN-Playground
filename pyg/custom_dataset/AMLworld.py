@@ -189,6 +189,7 @@ class AMLworld(InMemoryDataset):
     def __init__(self,
                  root,
                  opt="HI-Small",
+                 readout: Literal['edge', 'node'] = 'edge',
                  split="train",
                  load_time_stamp=True,
                  load_ports=True,
@@ -199,7 +200,6 @@ class AMLworld(InMemoryDataset):
                  force_download=False,
                  verbose=True,
                  ibm_split=True,
-                 readout: Literal['edge', 'node'] = 'edge',
                  *args,
                  **kwargs):
         """
@@ -273,6 +273,25 @@ class AMLworld(InMemoryDataset):
         elif readout == "node":
             self._data.y = self._data.x_label
             del self._data.x_label
+
+            if split == "train":
+                mask = self._data.train_mask
+                nodes = torch.unique(self._data.edge_index[:, mask].view(-1))
+                self._data = self._data.subgraph(nodes)
+                self._data.train_mask = torch.ones(self._data.num_nodes,
+                                                   dtype=torch.bool)
+            elif split == "val":
+                mask = self._data.val_mask
+                nodes = torch.unique(self._data.edge_index[:, mask].view(-1))
+                self._data = self._data.subgraph(nodes)
+                self._data.val_mask = torch.ones(self._data.num_nodes,
+                                                 dtype=torch.bool)
+            elif split == "test":
+                mask = self._data.test_mask
+                nodes = torch.unique(self._data.edge_index[:, mask].view(-1))
+                self._data = self._data.subgraph(nodes)
+                self._data.test_mask = torch.ones(self._data.num_nodes,
+                                                  dtype=torch.bool)
 
         # Add information to dataset object
         self.num_nodes = self._data.num_nodes
@@ -646,7 +665,7 @@ class AMLworld(InMemoryDataset):
         val_data.information = information
         val_data.edge_features_colID = edge_features_colID
         val_data.val_mask = torch.zeros(val_data.num_edges, dtype=torch.bool)
-        val_data.val_mask[-val_inds.shape[0]] = True
+        val_data.val_mask[-val_inds.shape[0]:] = True
         if self.pre_filter is not None:
             val_data = self.pre_filter(val_data)
         if self.pre_transform is not None:
@@ -675,7 +694,7 @@ class AMLworld(InMemoryDataset):
         te_data.information = information
         te_data.edge_features_colID = edge_features_colID
         te_data.test_mask = torch.zeros(te_data.num_edges, dtype=torch.bool)
-        te_data.test_mask[-te_inds.shape[0]] = True
+        te_data.test_mask[-te_inds.shape[0]:] = True
         if self.pre_filter is not None:
             te_data = self.pre_filter(te_data)
         if self.pre_transform is not None:
