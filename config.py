@@ -311,7 +311,7 @@ class config:
                 "seed": 1,
                 "criterion": "loss",
                 "ibm_split": True,
-                "f1_average": "binary"
+                "f1_average": "binary",
             },
             "register_info": {
                 "description": "GINe in IBM MultiGNN's paper.",
@@ -333,6 +333,7 @@ class config:
             "reverse_mp": True,
             "layer_mix": "None",
             "model_mix": "Mean",
+            "skip_connection": True,
         },
         "GINe-in-NC": {
             "base_model": "GINe",
