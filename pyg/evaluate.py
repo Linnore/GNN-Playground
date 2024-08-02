@@ -2,7 +2,7 @@ import torch
 import os
 
 from .data_utils import get_loader
-from .train_utils import get_batch_input
+from .train_utils import get_batch_input, append_source_edges
 
 from mlflow import MlflowClient
 from mlflow.pytorch import load_model as load_pyt_model
@@ -137,7 +137,17 @@ def eval_edge_classification(split,
     bar = tqdm(loader, total=len(loader), disable=not enable_tqdm)
     for batch in bar:
         if sampling_strategy == "SAGE":
+            # Get edges in batch that are source edges
             mask = torch.isin(batch.e_id, batch.input_id)
+            in_batch_input_id = batch.e_id[mask]
+
+            # Get source edges that are not in batch
+            mask_not_in_batch = ~torch.isin(batch.input_id, in_batch_input_id)
+
+            # Append source edges that are not in batch to the batch
+            append_source_edges(batch, mask_not_in_batch, loader.data)
+            mask = torch.hstack(
+                (mask, torch.ones(batch.num_appended, dtype=torch.bool)))
         elif sampling_strategy in [None, "None"]:
             mask = eval(f"batch.{split}_mask")
 

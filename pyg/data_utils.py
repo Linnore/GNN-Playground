@@ -74,6 +74,7 @@ def get_data_SAGE(config):
             AddEgoIds_for_LinkNeighborLoader)
         option = dataset.partition("-")[-1]
         dataset = []
+        force_reload = AMLworld_config["force_reload"]
         for split in ["train", "val", "test"]:
             dataset.append(
                 AMLworld(f'{dataset_dir}/AMLworld',
@@ -83,9 +84,10 @@ def get_data_SAGE(config):
                          load_ports=AMLworld_config["add_port"],
                          load_time_delta=AMLworld_config["add_time_delta"],
                          ibm_split=AMLworld_config["ibm_split"],
-                         force_reload=AMLworld_config["force_reload"],
+                         force_reload=force_reload,
                          verbose=config["general_config"]["verbose"],
                          readout=readout)[0])
+            force_reload = False
 
         if AMLworld_config["add_egoID"]:
             if task_type.endswith("NC"):
@@ -262,12 +264,12 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             num_workers=general_config["num_workers"],
             persistent_workers=general_config["persistent_workers"],
             transform=transform,
-            shuffle=True
+            shuffle=True,
         )
 
         if not general_config["sample_when_predict"]:
             logger.warning(
-                "sample_when_predict is set to be False. All neighbors will "
+                "sample_when_predict is set to False. All neighbors will "
                 "be used for aggregation when doing prediction in validation "
                 "and testing.")
             num_neighbors = [-1] * model_config["num_layers"]
@@ -300,8 +302,16 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             edge_label_index=train_data.edge_index[:, train_data.train_mask],
             edge_label=train_data.y[train_data.train_mask],
             transform=transform,
-            shuffle=True
+            shuffle=True,
+            num_workers=general_config["num_workers"],
         )
+
+        if not general_config["sample_when_predict"]:
+            logger.warning(
+                "sample_when_predict is set to False. All neighbors will "
+                "be used for aggregation when doing prediction in validation "
+                "and testing.")
+            num_neighbors = [-1] * model_config["num_layers"]
 
         val_loader = LinkNeighborLoader(
             val_data,
@@ -310,6 +320,7 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             edge_label_index=val_data.edge_index[:, val_data.val_mask],
             edge_label=val_data.y[val_data.val_mask],
             transform=transform,
+            num_workers=general_config["num_workers"],
         )
 
         test_loader = LinkNeighborLoader(
@@ -319,6 +330,7 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             edge_label_index=test_data.edge_index[:, test_data.test_mask],
             edge_label=test_data.y[test_data.test_mask],
             transform=transform,
+            num_workers=general_config["num_workers"],
         )
 
     return train_loader, val_loader, test_loader
@@ -474,7 +486,7 @@ def get_inference_loader_SAGE(infer_data: Data, transform, config: dict):
     logger.info(f"\ninference_data={infer_data}")
 
     if not general_config["sample_when_predict"]:
-        logger.warning("sample_when_predict is set to be False. "
+        logger.warning("sample_when_predict is set to False. "
                        "All neighbors will be used for aggregation "
                        "when doing prediction in validation and testing.")
         num_neighbors = [-1] * model_config["num_layers"]

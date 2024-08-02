@@ -187,6 +187,7 @@ class GINe_layer_mix(GIN_Custom):
     # Adjusted model architecture from
     # https://github.com/IBM/Multi-GNN/blob/252b0252afca109d1d216c411c59ff70753b25fc/models.py#L7
     def __init__(self,
+                 hidden_channels: int,
                  edge_update: bool = False,
                  edge_dim=None,
                  batch_norm=True,
@@ -201,8 +202,15 @@ class GINe_layer_mix(GIN_Custom):
         self.layer_mix = layer_mix
         self.readout = kwargs.get('readout', None)
 
+        if self.layer_mix.lower() == "cat":
+            assert hidden_channels % 2 == 0
+            self.conv_out_channels = hidden_channels // 2
+        else:
+            self.conv_out_channels = hidden_channels
+
         super().__init__(
             *args,
+            hidden_channels=hidden_channels,
             GINE=True,
             **kwargs,
         )
@@ -214,9 +222,11 @@ class GINe_layer_mix(GIN_Custom):
         self.convs = ModuleList()
         self.emlps = ModuleList()
         self.batch_norms = ModuleList()
+
         for _ in range(self.num_layers):
             conv = self.Conv(nn=self.init_MLP_for_GIN(self.hidden_channels,
-                                                      self.hidden_channels, 2),
+                                                      self.conv_out_channels,
+                                                      2),
                              edge_dim=self.hidden_channels)
             if self.edge_update:
                 self.emlps.append(
@@ -264,7 +274,8 @@ class GINe_layer_mix(GIN_Custom):
         self.rev_emlps = ModuleList()
         for _ in range(self.num_layers):
             conv = self.Conv(nn=self.init_MLP_for_GIN(self.hidden_channels,
-                                                      self.hidden_channels, 2),
+                                                      self.conv_out_channels,
+                                                      2),
                              edge_dim=self.hidden_channels)
             if self.edge_update:
                 self.rev_emlps.append(
@@ -303,7 +314,7 @@ class GINe_layer_mix(GIN_Custom):
             case "sum":
                 return fx + rx
             case "cat":
-                return torch.concatenate((fx, rx))
+                return torch.concatenate((fx, rx), dim=1)
             case "max":
                 return torch.max(fx, rx)
             case _:
@@ -340,7 +351,6 @@ class GINe_layer_mix(GIN_Custom):
 
             # Mix
             mix_out = self.get_mixture(fx, rx)
-            # mix_out = (fx + rx) / 2 # TODO: Try different mixture method
 
             x = mix_out + residual if self.skip_connection else mix_out
             x = self.batch_norms[i](x) if self.batch_norm else x
@@ -427,7 +437,8 @@ class GINe(torch.nn.Module):
                  batch_norm=True,
                  layer_mix: Literal["None", "Mean", "Sum", "Max",
                                     "Cat"] = "Mean",
-                 model_mix: Literal["Mean", "Sum", "Max"] = "Mean",
+                 model_mix: Literal["Mean", "Sum", "Max",
+                                    "Cat_MLP"] = "Cat_MLP",
                  *args,
                  **kwargs):
 
@@ -437,6 +448,7 @@ class GINe(torch.nn.Module):
         self.layer_mix = layer_mix
         self.model_mix = model_mix
         self.config = kwargs.get("config", {})
+        self.cat_mlp = None
 
         if self.reverse_mp and self.layer_mix.lower() == "none":
             kwargs["reverse_mp"] = False
@@ -453,6 +465,7 @@ class GINe(torch.nn.Module):
                                             layer_mix=layer_mix,
                                             *args,
                                             **kwargs)
+            self.cat_mlp = MLP([4, 4, 2])
 
         else:
             self.model = GINe_layer_mix(edge_update=edge_update,
@@ -463,21 +476,26 @@ class GINe(torch.nn.Module):
                                         **kwargs)
 
     def forward(self, x, edge_index, edge_attr, **kwargs):
-        if self.reverse_mp and self.layer_mix.lower() == "none":
-            rev_edge_index = kwargs.pop("rev_edge_index", None)
-            rev_edge_attr = kwargs.pop("rev_edge_attr", None)
-            assert len(kwargs) == 0, "Unexpected arguments!"
+        if self.reverse_mp:
+            if self.layer_mix.lower() == "none":
+                rev_edge_index = kwargs.pop("rev_edge_index", None)
+                rev_edge_attr = kwargs.pop("rev_edge_attr", None)
+                assert len(kwargs) == 0, "Unexpected arguments!"
 
-            org_out = self.org_model(x, edge_index, edge_attr)
-            rev_out = self.rev_model(x, rev_edge_index, rev_edge_attr)
-            return self.get_model_mixture(org_out, rev_out)
+                org_out = self.org_model(x, edge_index, edge_attr)
+                rev_out = self.rev_model(x, rev_edge_index, rev_edge_attr)
+                return self.get_model_mixture(org_out, rev_out)
         else:
-            return self.model(x, edge_index, edge_attr, **kwargs)
+            self.layer_mix = "none"  # No reverse_mp
+
+        return self.model(x, edge_index, edge_attr, **kwargs)
 
     def reset_parameters(self):
         if self.reverse_mp and self.layer_mix.lower() == "none":
             self.org_model.reset_parameters()
             self.rev_model.reset_parameters()
+            if self.cat_mlp is not None:
+                self.cat_mlp.reset_parameters()
         else:
             self.model.reset_parameters()
 
@@ -489,5 +507,8 @@ class GINe(torch.nn.Module):
                 return org_out + rev_out
             case "max":
                 return torch.max(org_out, rev_out)
+            case "cat_mlp":
+                out = torch.cat((org_out, rev_out), dim=1)
+                return self.cat_mlp(out)
             case _:
                 raise NotImplementedError

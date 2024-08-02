@@ -30,7 +30,7 @@ def train_gnn(config):
     mlflow.set_experiment(mlflow_config["experiment"])
     run_name = f"{config['model']}-{config['dataset']}"
     model_name = run_name
-    run = mlflow.start_run(run_name=run_name)
+    run = mlflow.start_run(run_name=run_name, log_system_metrics=True)
     mlflow.set_tag("base model", model_config["base_model"])
     mlflow.set_tag("dataset", config["dataset"])
     logger.info(f"Launching run: {run.info.run_name}")

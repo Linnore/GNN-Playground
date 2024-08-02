@@ -56,7 +56,7 @@ class config:
         "lr": 5e-3,
         "weight_decay": 0.0005,  # L2 regularization,
         "weighted_CE": False,  # Only useful for single-label task.
-        "CE_weight": [1, 6],
+        "CE_weight": "None",
         "weighted_BCE": False,  # Only useful for multi-label task.
     }
     """Options for difference experiment settings
@@ -338,6 +338,7 @@ class config:
             "base_model": "GINe",
             "overwrite": {
                 "framework": "inductive",
+                "SAGE_inductive_option": "strict",
                 "sampling_strategy": "SAGE",
                 "lr": 5e-3,
                 "weight_decay": 0,
@@ -352,7 +353,7 @@ class config:
                 "add_time_delta": False,
                 "batch_norm": True,
                 "seed": 118010142,
-                "criterion": "loss",
+                "criterion": "f1",
                 "ibm_split": True,
                 "f1_average": "binary",
                 "task_type": "single-label-NC",
