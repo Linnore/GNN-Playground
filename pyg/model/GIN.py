@@ -168,7 +168,7 @@ class GIN_Custom(torch.nn.Module):
         for i in range(self.num_layers):
             x = F.dropout(x, p=self.dropout, training=self.training)
             if self.skip_connection:
-                residual = self.skip_proj[i](x)
+                residual = self.skip_proj[i](x.clone())
             conv_out = self.convs[i](x, edge_index)
             x = conv_out + residual if self.skip_connection else conv_out
 
@@ -343,7 +343,7 @@ class GINe_layer_mix(GIN_Custom):
         xs = [x]
         for i in range(self.num_layers):
             if self.skip_connection:
-                residual = Identity(x)
+                residual = self.skip_proj[i](x.clone())
             # non-reverse
             fx = self.convs[i](x, edge_index, edge_attr)
 
@@ -356,18 +356,18 @@ class GINe_layer_mix(GIN_Custom):
             mix_out = self.batch_norms[i](
                 mix_out) if self.batch_norm else mix_out
             mix_out = F.relu(mix_out)
-            x = mix_out + residual if self.skip_connection else mix_out
+            x = (mix_out + residual) / 2 if self.skip_connection else mix_out
 
             if self.jk_mode is not None:
                 xs.append(x)
 
             if self.edge_update:
                 if self.skip_connection:
-                    residual = self.skip_proj[i](edge_attr)
+                    residual = self.skip_proj[i](edge_attr.clone())
                 emlp_out = self.emlps[i](torch.cat([x[src], x[dst], edge_attr],
                                                    -1))
                 if self.skip_connection:
-                    edge_attr = emlp_out + residual
+                    edge_attr = (emlp_out + residual) / 2
                 else:
                     edge_attr = emlp_out
 
@@ -393,23 +393,23 @@ class GINe_layer_mix(GIN_Custom):
         for i in range(self.num_layers):
             # x = F.dropout(x, p=self.dropout, training=self.training)
             if self.skip_connection:
-                residual = self.skip_proj[i](x)
+                residual = self.skip_proj[i](x.clone())
             conv_out = self.convs[i](x, edge_index, edge_attr)
             conv_out = self.batch_norms[i](
                 conv_out) if self.batch_norm else conv_out
             conv_out = F.relu(conv_out)
-            x = conv_out + residual if self.skip_connection else conv_out
+            x = (conv_out + residual) / 2 if self.skip_connection else conv_out
 
             if self.jk_mode is not None:
                 xs.append(x)
 
             if self.edge_update:
                 if self.skip_connection:
-                    residual = self.skip_proj[i](edge_attr)
+                    residual = self.skip_proj[i](edge_attr.clone())
                 emlp_out = self.emlps[i](torch.cat([x[src], x[dst], edge_attr],
                                                    -1))
                 if self.skip_connection:
-                    edge_attr = emlp_out + residual
+                    edge_attr = (emlp_out + residual) / 2
                 else:
                     edge_attr = emlp_out
 
