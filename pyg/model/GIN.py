@@ -130,7 +130,7 @@ class GIN_Custom(torch.nn.Module):
     def init_MLP_for_GIN(self, in_channels: int, out_channels: int,
                          num_MLP_layers):
         channel_list = [in_channels]
-        for i in range(num_MLP_layers-1):
+        for i in range(num_MLP_layers - 1):
             channel_list.append(in_channels)
         channel_list.append(out_channels)
         mlp = MLP(channel_list, norm=None)
@@ -353,9 +353,11 @@ class GINe_layer_mix(GIN_Custom):
             # Mix
             mix_out = self.get_mixture(fx, rx)
 
+            mix_out = self.batch_norms[i](
+                mix_out) if self.batch_norm else mix_out
+            mix_out = F.relu(mix_out)
             x = mix_out + residual if self.skip_connection else mix_out
-            x = self.batch_norms[i](x) if self.batch_norm else x
-            x = F.relu(x)
+
             if self.jk_mode is not None:
                 xs.append(x)
 
@@ -393,9 +395,10 @@ class GINe_layer_mix(GIN_Custom):
             if self.skip_connection:
                 residual = self.skip_proj[i](x)
             conv_out = self.convs[i](x, edge_index, edge_attr)
+            conv_out = self.batch_norms[i](
+                conv_out) if self.batch_norm else conv_out
+            conv_out = F.relu(conv_out)
             x = conv_out + residual if self.skip_connection else conv_out
-            x = self.batch_norms[i](x) if self.batch_norm else x
-            x = F.relu(x)
 
             if self.jk_mode is not None:
                 xs.append(x)

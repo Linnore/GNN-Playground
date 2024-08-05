@@ -35,22 +35,26 @@ def train_gnn(config):
     mlflow.set_tag("dataset", config["dataset"])
     logger.info(f"Launching run: {run.info.run_name}")
 
-    # Log hyperparameters
-    params = config["hyperparameters"]
-    params.update(model_config)
-    params_str = pprint.pformat(params)
-    general_config_str = pprint.pformat(general_config)
-    logger.info(f"General configurations:\n{general_config_str}")
-    logger.info(f"Hyperparameters:\n{params_str}")
-    mlflow.log_params(general_config)
-    mlflow.log_params(params)
-
     # Get loaders
     train_loader, val_loader, test_loader = get_loader(config)
 
     # Get model
     model = get_model(config, train_loader).to(device)
     model.reset_parameters()
+
+    # Log hyperparameters
+    params = config["hyperparameters"]
+    params.update(model_config)
+    params_str = pprint.pformat(params)
+    general_config_str = pprint.pformat(general_config)
+    datsset_info_str = pprint.pformat(model.config['dataset_config'])
+    logger.info(f"General configurations:\n{general_config_str}")
+    logger.info(f"Hyperparameters:\n{params_str}")
+    logger.info(f"Dataset information: {datsset_info_str}")
+    mlflow.log_params(model.config["general_config"])
+    mlflow.log_params(model.config["dataset_config"])
+    mlflow.log_params(model.config["hyperparameters"])
+    mlflow.log_params(model.config["model_config"])
 
     # Setup loss function
     loss_fn = get_loss_fn(config, train_loader, reduction='mean').to(device)

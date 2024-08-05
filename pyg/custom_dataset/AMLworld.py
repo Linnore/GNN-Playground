@@ -178,10 +178,10 @@ class AddEgoIds_for_NeighborLoader(BaseTransform):
 
 
 def z_norm(data):
-    std = data.std(0)
+    std = data.std(0).unsqueeze(0)
     std = torch.where(std == 0,
                       torch.tensor(1, dtype=torch.float32).cpu(), std)
-    return (data - data.mean(0)) / std
+    return (data - data.mean(0).unsqueeze(0)) / std
 
 
 class AMLworld(InMemoryDataset):
@@ -266,7 +266,7 @@ class AMLworld(InMemoryDataset):
             self.logger.info(f'Edge features being used: {edge_features}')
             del self._data.information
 
-        # Select the labels to returen
+        # Select the labels to return
         self._data.readout = readout
         if readout == "edge":
             del self._data.x_label
@@ -606,9 +606,11 @@ class AMLworld(InMemoryDataset):
         for id, feature in enumerate(edge_features):
             edge_features_colID[feature] = id
 
+        # no_norm_features = ["Payment Format", "In-Port", "Out-Port"]
+        no_norm_features = []
         norm_col = []
         for feature, id in edge_features_colID.items():
-            if feature not in ["Payment Format"]:
+            if feature not in no_norm_features:
                 norm_col.append(id)
 
         # Compute and save data objects
