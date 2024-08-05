@@ -470,27 +470,26 @@ class GINe(torch.nn.Module):
             self.cat_mlp = MLP([4, 4, 2])
 
         else:
+            if not self.reverse_mp:
+                self.layer_mix = "None"
             self.model = GINe_layer_mix(edge_update=edge_update,
                                         edge_dim=edge_dim,
                                         batch_norm=batch_norm,
-                                        layer_mix=layer_mix,
+                                        layer_mix=self.layer_mix,
                                         *args,
                                         **kwargs)
 
     def forward(self, x, edge_index, edge_attr, **kwargs):
-        if self.reverse_mp:
-            if self.layer_mix.lower() == "none":
-                rev_edge_index = kwargs.pop("rev_edge_index", None)
-                rev_edge_attr = kwargs.pop("rev_edge_attr", None)
-                assert len(kwargs) == 0, "Unexpected arguments!"
+        if self.reverse_mp and self.layer_mix.lower() == "none":
+            rev_edge_index = kwargs.pop("rev_edge_index", None)
+            rev_edge_attr = kwargs.pop("rev_edge_attr", None)
+            assert len(kwargs) == 0, "Unexpected arguments!"
 
-                org_out = self.org_model(x, edge_index, edge_attr)
-                rev_out = self.rev_model(x, rev_edge_index, rev_edge_attr)
-                return self.get_model_mixture(org_out, rev_out)
+            org_out = self.org_model(x, edge_index, edge_attr)
+            rev_out = self.rev_model(x, rev_edge_index, rev_edge_attr)
+            return self.get_model_mixture(org_out, rev_out)
         else:
-            self.layer_mix = "none"  # No reverse_mp
-
-        return self.model(x, edge_index, edge_attr, **kwargs)
+            return self.model(x, edge_index, edge_attr, **kwargs)
 
     def reset_parameters(self):
         if self.reverse_mp and self.layer_mix.lower() == "none":
