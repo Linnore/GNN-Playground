@@ -115,9 +115,9 @@ class GraphData(Data):
         self.num_nodes = int(self.x.shape[0])
         self.node_timestamps = node_timestamps
         if timestamps is not None:
-            self.timestamps = timestamps.long()
+            self.timestamps = timestamps
         elif edge_attr is not None:
-            self.timestamps = edge_attr[:, 0].clone().long()
+            self.timestamps = edge_attr[:, 0].clone()
         else:
             self.timestamps = None
 
@@ -271,6 +271,7 @@ class AMLworld(InMemoryDataset):
         if readout == "edge":
             del self._data.x_label
         elif readout == "node":
+            raise NotImplementedError("Buggy. Not finished yet!")
             self._data.y = self._data.x_label
             del self._data.x_label
 
