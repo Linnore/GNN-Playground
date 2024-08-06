@@ -298,81 +298,16 @@ def edge_classification_step(mode: str,
     return avg_loss, f1, predictions, truths
 
 
-def single_label_NC_step(model, loss_fn, optimizer, sampling_strategy,
-                         enable_tqdm, device, reverse_mp, f1_average):
-    return lambda *args, **kwargs: node_classification_step(
-        *args,
-        model=model,
-        loss_fn=loss_fn,
-        optimizer=optimizer,
-        enable_tqdm=enable_tqdm,
-        sampling_strategy=sampling_strategy,
-        device=device,
-        reverse_mp=reverse_mp,
-        f1_average=f1_average,
-        **kwargs)
-
-
-def multi_label_NC_step(model, loss_fn, optimizer, sampling_strategy,
-                        enable_tqdm, device, reverse_mp, f1_average):
-    return lambda *args, **kwargs: node_classification_step(
-        *args,
-        model=model,
-        loss_fn=loss_fn,
-        optimizer=optimizer,
-        enable_tqdm=enable_tqdm,
-        sampling_strategy=sampling_strategy,
-        device=device,
-        reverse_mp=reverse_mp,
-        f1_average=f1_average,
-        multilabel=True,
-        threshold=0,
-        **kwargs)
-
-
-def single_label_EC_step(model, loss_fn, optimizer, sampling_strategy,
-                         enable_tqdm, device, reverse_mp, f1_average):
-    return lambda *args, **kwargs: edge_classification_step(
-        *args,
-        model=model,
-        loss_fn=loss_fn,
-        optimizer=optimizer,
-        enable_tqdm=enable_tqdm,
-        sampling_strategy=sampling_strategy,
-        device=device,
-        reverse_mp=reverse_mp,
-        f1_average=f1_average,
-        **kwargs)
-
-
-def multi_label_EC_step(model, loss_fn, optimizer, sampling_strategy,
-                        enable_tqdm, device, reverse_mp, f1_average):
-    return lambda *args, **kwargs: edge_classification_step(
-        *args,
-        model=model,
-        loss_fn=loss_fn,
-        optimizer=optimizer,
-        enable_tqdm=enable_tqdm,
-        sampling_strategy=sampling_strategy,
-        device=device,
-        reverse_mp=reverse_mp,
-        f1_average=f1_average,
-        multilabel=True,
-        threshold=0,
-        **kwargs)
-
-
-def get_run_step(**kwargs):
-    task_type = kwargs.pop('task_type')
+def get_run_step(task_type, run_step_kwargs):
     if task_type == "single-label-NC":
-        run_step = single_label_NC_step(**kwargs)
+        return node_classification_step, run_step_kwargs
     elif task_type == "multi-label-NC":
-        run_step = multi_label_NC_step(**kwargs)
+        run_step_kwargs["multilabel"] = True
+        return node_classification_step, run_step_kwargs
     elif task_type == "single-label-EC":
-        run_step = single_label_EC_step(**kwargs)
-    elif task_type == "single-label-EC":
-        run_step = multi_label_EC_step(**kwargs)
+        return edge_classification_step, run_step_kwargs
+    elif task_type == "multi-label-EC":
+        run_step_kwargs["multilabel"] = True
+        return edge_classification_step, run_step_kwargs
     else:
         raise NotImplementedError("Unsupported task type for training.")
-
-    return run_step

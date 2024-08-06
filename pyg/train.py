@@ -94,8 +94,7 @@ def train_gnn(config):
         patience = general_config["num_epochs"]
 
     # Setup training steps according to task type
-    run_step = get_run_step(
-        task_type=dataset_config["task_type"],
+    run_step_kwargs = dict(
         model=model,
         loss_fn=loss_fn,
         optimizer=optimizer,
@@ -104,6 +103,8 @@ def train_gnn(config):
         device=device,
         reverse_mp=reverse_mp,
         f1_average=general_config["f1_average"])
+    run_step, run_step_kwargs = get_run_step(dataset_config["task_type"],
+                                             run_step_kwargs)
 
     best_epoch = 0
     for epoch in range(1, 1 + general_config["num_epochs"]):
@@ -112,16 +113,19 @@ def train_gnn(config):
 
         # Training
         model.train()
-        train_loss, train_f1, _, _ = run_step("train", epoch, train_loader)
+        train_loss, train_f1, _, _ = run_step("train", epoch, train_loader,
+                                              **run_step_kwargs)
 
         with torch.no_grad():
             # Validation
             model.eval()
-            val_loss, val_f1, _, _ = run_step("val", epoch, val_loader)
+            val_loss, val_f1, _, _ = run_step("val", epoch, val_loader,
+                                              **run_step_kwargs)
 
             # Test
             _, test_f1, predictions, truths = run_step("test", epoch,
-                                                       test_loader)
+                                                       test_loader,
+                                                       **run_step_kwargs)
 
         logger.info(f"Epoch {epoch}: train_loss={train_loss:<8.6g}, "
                     f"train_f1={train_f1:<8.6g}, val_loss={val_loss:<8.6g}, "
