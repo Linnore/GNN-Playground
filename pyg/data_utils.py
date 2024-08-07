@@ -86,9 +86,9 @@ def get_data_SAGE(config):
                             force_reload=force_reload,
                             verbose=config["general_config"]["verbose"],
                             readout=readout)[0]
-            # data.edge_label_inds
-            data.input_id_to_e_id = lambda x: x + data.num_edge - eval(
-                f"data.{split}_mask.sum()")
+            data.num_input_edges = eval(f"data.{split}_mask.sum()")
+            data.input_id_to_e_id = torch.arange(
+                data.num_input_edges) + data.num_edges - data.num_input_edges
             dataset.append(data.clone())
             force_reload = False
 

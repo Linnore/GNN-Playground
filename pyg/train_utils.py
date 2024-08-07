@@ -236,7 +236,7 @@ def edge_classification_step(mode: str,
 
         if sampling_strategy == "SAGE":
             # Get edges in batch that are source edges
-            batch.src_e_id = batch.input_id_to_e_id(batch.input_id)
+            batch.src_e_id = loader.data.input_id_to_e_id[batch.input_id]
             mask = torch.isin(batch.e_id, batch.src_e_id)
             in_batch_e_id = batch.e_id[mask]
 
