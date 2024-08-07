@@ -31,14 +31,14 @@ def append_source_edges(batch, mask_not_in_batch, data):
     batch.y = torch.hstack((batch.y, batch.edge_label[mask_not_in_batch]))
 
     # Retrieve edge attributes from the hole data object
-    missing_input_id = batch.input_id[mask_not_in_batch]
+    missing_e_id = batch.src_e_id[mask_not_in_batch]
     if hasattr(batch, 'edge_attr') and batch.edge_attr is not None:
         batch.edge_attr = torch.vstack(
-            (batch.edge_attr, data.edge_attr[missing_input_id]))
+            (batch.edge_attr, data.edge_attr[missing_e_id]))
         if hasattr(batch, "rev_edge_attr"):
             batch.rev_edge_attr = torch.vstack(
-                (batch.rev_edge_attr, data.rev_edge_attr[missing_input_id]))
-    batch.num_appended = missing_input_id.shape[0]
+                (batch.rev_edge_attr, data.rev_edge_attr[missing_e_id]))
+    batch.num_appended = missing_e_id.shape[0]
 
 
 def get_io_schema(sample_input: dict, dataset_config: dict, reverse_mp):
@@ -236,11 +236,12 @@ def edge_classification_step(mode: str,
 
         if sampling_strategy == "SAGE":
             # Get edges in batch that are source edges
-            mask = torch.isin(batch.e_id, batch.input_id)
-            in_batch_input_id = batch.e_id[mask]
+            batch.src_e_id = batch.input_id_to_e_id(batch.input_id)
+            mask = torch.isin(batch.e_id, batch.src_e_id)
+            in_batch_e_id = batch.e_id[mask]
 
             # Get source edges that are not in batch
-            mask_not_in_batch = ~torch.isin(batch.input_id, in_batch_input_id)
+            mask_not_in_batch = ~torch.isin(batch.src_e_id, in_batch_e_id)
 
             # Append source edges that are not in batch to the batch
             append_source_edges(batch, mask_not_in_batch, loader.data)
