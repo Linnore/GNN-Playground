@@ -438,7 +438,8 @@ class AMLworld(InMemoryDataset):
         del raw
 
         ################################################################
-        # Step 2. Load datatable as a PyG data object. Adopt codes from
+        # Step 2. Load datatable as a PyG data object.
+        # Adopt codes from
         # "https://github.com/IBM/Multi-GNN/blob/main/data_loading.py"
         df_edges = pd.read_csv(formatted_trans_file,
                                usecols=[

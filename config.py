@@ -219,6 +219,7 @@ class config:
                 "sampling_strategy": "None",
                 "lr": 5e-3,
                 "weight_decay": 5e-4,
+                "sample_when_predict": True,  # Important for GIN model!
             },
             # Registeration inforamtion for MLflow
             "register_info": {
@@ -241,6 +242,7 @@ class config:
                 "sampling_strategy": "None",
                 "lr": 1e-2,
                 "weight_decay": 5e-4,
+                "sample_when_predict": True,  # Important for GIN model!
             },
             # Registeration inforamtion for MLflow
             "register_info": {
@@ -312,6 +314,7 @@ class config:
                 "criterion": "loss",
                 "ibm_split": True,
                 "f1_average": "binary",
+                "sample_when_predict": True,  # Important for GIN model!
             },
             "register_info": {
                 "description": "GINe in IBM MultiGNN's paper.",
@@ -335,51 +338,7 @@ class config:
             "model_mix": "Mean",
             "skip_connection": True,
         },
-        "GINe-in-NC": {
-            "base_model": "GINe",
-            "overwrite": {
-                "framework": "inductive",
-                "SAGE_inductive_option": "strict",
-                "sampling_strategy": "SAGE",
-                "lr": 5e-3,
-                "weight_decay": 0,
-                "weighted_CE": True,
-                "CE_weight": [1, 6],
-                "num_epochs": 200,
-                "patience": 20,
-                "batch_size": 8192,
-                "add_time_stamp": True,
-                "add_egoID": True,
-                "add_port": True,
-                "add_time_delta": False,
-                "batch_norm": True,
-                "seed": 118010142,
-                "criterion": "f1",
-                "ibm_split": True,
-                "f1_average": "binary",
-                "task_type": "single-label-NC",
-            },
-            "register_info": {
-                "description": "GINe in IBM MultiGNN's paper.",
-                "tags": {
-                    "add_time_stamp": "will be overwritten",
-                    "add_egoID": "will be overwritten",
-                    "add_port": "will be overwritten",
-                    "add_time_delta": "will be overwritten",
-                    "batch_norm": "will be overwritten",
-                    "ibm_split": "will be overwritten",
-                }
-            },
-            "hidden_channels": 66,
-            "num_layers": 2,
-            "num_neighbors": [100, 100],
-            "edge_update": True,
-            "dropout": 0.1,
-            "batch_norm": "will be overwritten",
-            "reverse_mp": False,
-            "layer_mix": "None",
-            "model_mix": "Mean",
-        },
+
         "PNAe-in": {
             "base_model": "PNAe",
             "overwrite": {
