@@ -76,17 +76,20 @@ def get_data_SAGE(config):
         dataset = []
         force_reload = AMLworld_config["force_reload"]
         for split in ["train", "val", "test"]:
-            dataset.append(
-                AMLworld(f'{dataset_dir}/AMLworld',
-                         opt=option,
-                         split=split,
-                         load_time_stamp=AMLworld_config["add_time_stamp"],
-                         load_ports=AMLworld_config["add_port"],
-                         load_time_delta=AMLworld_config["add_time_delta"],
-                         ibm_split=AMLworld_config["ibm_split"],
-                         force_reload=force_reload,
-                         verbose=config["general_config"]["verbose"],
-                         readout=readout)[0])
+            data = AMLworld(f'{dataset_dir}/AMLworld',
+                            opt=option,
+                            split=split,
+                            load_time_stamp=AMLworld_config["add_time_stamp"],
+                            load_ports=AMLworld_config["add_port"],
+                            load_time_delta=AMLworld_config["add_time_delta"],
+                            ibm_split=AMLworld_config["ibm_split"],
+                            force_reload=force_reload,
+                            verbose=config["general_config"]["verbose"],
+                            readout=readout)[0]
+            # data.edge_label_inds
+            data.input_id_to_e_id = lambda x: x + data.num_edge - eval(
+                f"data.{split}_mask.sum()")
+            dataset.append(data.clone())
             force_reload = False
 
         if AMLworld_config["add_egoID"]:
