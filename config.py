@@ -157,7 +157,7 @@ class config:
                     "v2": False,  # Change to v2 if v2 is True
                 },
             },
-            "hidden_channels_per_head": 32,
+            "hidden_channels_per_head": 8,
             "num_layers": 2,
             "heads": 8,
             "output_heads": 1,
@@ -216,9 +216,9 @@ class config:
             "base_model": "GIN_Custom",
             "overwrite": {
                 "framework": "transductive",
-                "sampling_strategy": "None",
-                "lr": 5e-3,
-                "weight_decay": 5e-4,
+                "sampling_strategy": "SAGE",
+                "lr": 1e-3,
+                "weight_decay": 1e-3,
                 "sample_when_predict": True,  # Important for GIN model!
             },
             # Registeration inforamtion for MLflow
@@ -230,10 +230,11 @@ class config:
             },
             "hidden_channels": 64,
             "num_layers": 2,
-            "dropout": 0.0,
-            "jk": "cat",
+            "num_neighbors": [25, 10],
+            "dropout": 0,
+            "jk": None,
             "GINE": False,
-            "skip_connection": False,
+            "skip_connection": True,
         },
         "GIN-PyG-trans": {
             "base_model": "GIN_PyG",

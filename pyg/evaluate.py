@@ -138,16 +138,18 @@ def eval_edge_classification(split,
     for batch in bar:
         if sampling_strategy == "SAGE":
             # Get edges in batch that are source edges
-            mask = torch.isin(batch.e_id, batch.input_id)
-            in_batch_input_id = batch.e_id[mask]
+            batch.src_e_id = loader.data.input_id_to_e_id[batch.input_id]
+            mask = torch.isin(batch.e_id, batch.src_e_id)
+            in_batch_e_id = batch.e_id[mask]
 
             # Get source edges that are not in batch
-            mask_not_in_batch = ~torch.isin(batch.input_id, in_batch_input_id)
+            mask_not_in_batch = ~torch.isin(batch.src_e_id, in_batch_e_id)
 
             # Append source edges that are not in batch to the batch
             append_source_edges(batch, mask_not_in_batch, loader.data)
             mask = torch.hstack(
                 (mask, torch.ones(batch.num_appended, dtype=torch.bool)))
+
         elif sampling_strategy in [None, "None"]:
             mask = eval(f"batch.{split}_mask")
 
