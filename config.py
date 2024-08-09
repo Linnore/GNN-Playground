@@ -190,7 +190,7 @@ class config:
             "num_layers": 3,
             "heads": [4, 4],
             "hidden_channels_per_head": [256, 256],
-            "output_heas": 6,
+            "output_heads": 6,
             "dropout": 0,
             "jk": None,
             "v2": False,
