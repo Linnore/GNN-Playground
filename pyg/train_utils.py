@@ -41,28 +41,36 @@ def append_source_edges(batch, mask_not_in_batch, data):
     batch.num_appended = missing_e_id.shape[0]
 
 
-def get_io_schema(sample_input: dict, dataset_config: dict, reverse_mp):
+def get_io_schema(sample_input: dict, dataset_config: dict):
     input_list = [
         TensorSpec(np.dtype(np.float32),
-                   (-1, dataset_config["num_node_features"]), "x"),
-        TensorSpec(np.dtype(np.int64), (2, -1), "edge_index"),
+                   ("num_nodes", dataset_config["num_node_features"]), "x"),
+        TensorSpec(np.dtype(np.int64), (2, "num_edges"), "edge_index"),
     ]
     if "edge_attr" in sample_input:
         input_list.append(
             TensorSpec(np.dtype(np.float32),
-                       (-1, sample_input["edge_attr"].shape[1]), "edge_attr"))
+                       ("num_edges", sample_input["edge_attr"].shape[1]),
+                       "edge_attr"))
     if "rev_edge_index" in sample_input:
         input_list.append(
-            TensorSpec(np.dtype(np.float32), (2, -1), "rev_edge_index"))
+            TensorSpec(np.dtype(np.float32), (2, "num_edges"),
+                       "rev_edge_index"))
     if "rev_edge_attr" in sample_input:
         input_list.append(
             TensorSpec(np.dtype(np.float32),
-                       (-1, sample_input["rev_edge_attr"].shape[1]),
+                       ("num_edges", sample_input["rev_edge_attr"].shape[1]),
                        "rev_edge_attr"))
 
     input_schema = Schema(input_list)
+
+    if dataset_config["task_type"].endswith("NC"):
+        output_first_dim = "num_nodes"
+    elif dataset_config["task_type"].endswith("EC"):
+        output_first_dim = "num_edges"
     output_schema = Schema([
-        TensorSpec(np.dtype(np.float32), (-1, dataset_config["num_classes"]))
+        TensorSpec(np.dtype(np.float32),
+                   (output_first_dim, dataset_config["num_classes"]))
     ])
 
     return input_schema, output_schema

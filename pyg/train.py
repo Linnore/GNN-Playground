@@ -158,8 +158,10 @@ def train_gnn(config):
 
     # Save model
     model.load_state_dict(best_model_state_dict)
-    input_schema, output_schema = get_io_schema(sample_input, dataset_config,
-                                                reverse_mp)
+    input_schema, output_schema = get_io_schema(
+        sample_input,
+        dataset_config,
+    )
 
     mlflow.pytorch.log_model(
         model,
