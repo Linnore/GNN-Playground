@@ -262,13 +262,35 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
     logger.info(f"\ntrain_data={train_data}\n"
                 f"val_data={val_data}\ntest_data={test_data}")
 
+    train_mask = train_data.train_mask
+    val_mask = val_data.val_mask
+    test_mask = test_data.test_mask
     task_type = config["dataset_config"]["task_type"]
+    temporal = general_config.get("temporal_sampling", None)
+    if temporal:
+        temporal_strategy = general_config.get("temporal_strategy", "uniform")
+        time_attr = general_config.get("time_attr", "time")
+        train_time = eval(f"train_data.{time_attr}")
+        train_time = train_time[train_mask]
+        val_time = eval(f"val_data.{time_attr}")
+        val_time = val_time[val_mask]
+        test_time = eval(f"test_data.{time_attr}")
+        test_time = test_time[test_mask]
+    else:
+        temporal_strategy = "uniform"
+        time_attr = None
+        train_time = None
+        val_time = None
+        test_time = None
     if task_type in ["single-label-NC", "multi-label-NC"]:
         train_loader = NeighborLoader(
             train_data,
             num_neighbors=num_neighbors.copy(),
             batch_size=params["batch_size"],
-            input_nodes=train_data.train_mask,
+            input_nodes=train_mask,
+            input_time=train_time,
+            temporal_strategy=temporal_strategy,
+            time_attr=time_attr,
             num_workers=general_config["num_workers"],
             persistent_workers=general_config["persistent_workers"],
             transform=transform,
@@ -286,7 +308,10 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             val_data,
             num_neighbors=num_neighbors,
             batch_size=params["batch_size"],
-            input_nodes=val_data.val_mask,
+            input_nodes=val_mask,
+            input_time=val_time,
+            temporal_strategy=temporal_strategy,
+            time_attr=time_attr,
             num_workers=general_config["num_workers"],
             persistent_workers=general_config["persistent_workers"],
             transform=transform,
@@ -296,7 +321,8 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             test_data,
             num_neighbors=num_neighbors,
             batch_size=params["batch_size"],
-            input_nodes=test_data.test_mask,
+            input_nodes=test_mask,
+            input_time=test_time,
             num_workers=general_config["num_workers"],
             persistent_workers=general_config["persistent_workers"],
             transform=transform,
@@ -307,8 +333,11 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             train_data,
             num_neighbors=num_neighbors,
             batch_size=params["batch_size"],
-            edge_label_index=train_data.edge_index[:, train_data.train_mask],
-            edge_label=train_data.y[train_data.train_mask],
+            edge_label_index=train_data.edge_index[:, train_mask],
+            edge_label=train_data.y[train_mask],
+            edge_label_time=train_time,
+            time_attr=time_attr,
+            temporal_strategy=temporal_strategy,
             transform=transform,
             shuffle=True,
             num_workers=general_config["num_workers"],
@@ -325,8 +354,11 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             val_data,
             num_neighbors=num_neighbors,
             batch_size=params["batch_size"],
-            edge_label_index=val_data.edge_index[:, val_data.val_mask],
-            edge_label=val_data.y[val_data.val_mask],
+            edge_label_index=val_data.edge_index[:, val_mask],
+            edge_label=val_data.y[val_mask],
+            edge_label_time=val_time,
+            time_attr=time_attr,
+            temporal_strategy=temporal_strategy,
             transform=transform,
             num_workers=general_config["num_workers"],
         )
@@ -335,11 +367,17 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             test_data,
             num_neighbors=num_neighbors,
             batch_size=params["batch_size"],
-            edge_label_index=test_data.edge_index[:, test_data.test_mask],
-            edge_label=test_data.y[test_data.test_mask],
+            edge_label_index=test_data.edge_index[:, test_mask],
+            edge_label=test_data.y[test_mask],
+            edge_label_time=test_time,
+            time_attr=time_attr,
+            temporal_strategy=temporal_strategy,
             transform=transform,
             num_workers=general_config["num_workers"],
         )
+
+    elif task_type in ["single-label-NC_by_self_loop_EC"]:
+        pass
 
     return train_loader, val_loader, test_loader
 
