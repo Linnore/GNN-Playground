@@ -29,6 +29,10 @@ class config:
         "sampling_strategy":
         "None",  # Must be choosen from sampling_strategy options
 
+        "temporal_sampling": False,
+        "temporal_strategy": "uniform",
+        "time_attr": "time",
+
         # Used if sampling_strategy is SAGE;
         # Must be choosen from SAGE_inductive_options
         "SAGE_inductive_option": "strict",
@@ -316,6 +320,7 @@ class config:
                 "ibm_split": True,
                 "f1_average": "binary",
                 "sample_when_predict": True,  # Important for GIN model!
+                # "temporal_sampling": True,
             },
             "register_info": {
                 "description": "GINe in IBM MultiGNN's paper.",

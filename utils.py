@@ -36,6 +36,11 @@ def add_train_parser(subparsers: argparse._SubParsersAction,
     general_config.add_argument('--sample_when_predict',
                                 action=argparse.BooleanOptionalAction,
                                 default=None)
+    general_config.add_argument('--temporal_sampling',
+                                action=argparse.BooleanOptionalAction,
+                                default=None)
+    general_config.add_argument('--temporal_strategy', default=None)
+    general_config.add_argument('--time_attr', default=None)
     general_config.add_argument('--seed', type=int, default=None)
     general_config.add_argument('--device', default=None)
     general_config.add_argument('--tqdm',
@@ -51,6 +56,9 @@ def add_train_parser(subparsers: argparse._SubParsersAction,
     general_config.add_argument('--num_epochs', type=int, default=None)
     general_config.add_argument('--patience', type=int, default=None)
     general_config.add_argument('--num_workers', type=int, default=None)
+    general_config.add_argument('--verbose',
+                                action=argparse.BooleanOptionalAction,
+                                default=None)
 
     # General hyperparameters
     hyperparameters = parser.add_argument_group("Global Hyperparameters")
@@ -120,9 +128,6 @@ def add_train_parser(subparsers: argparse._SubParsersAction,
     AMLworld_config.add_argument('--task_type',
                                  choices=config.task_type_options,
                                  default=None)
-    general_config.add_argument('--verbose',
-                                action=argparse.BooleanOptionalAction,
-                                default=None)
 
 
 def add_inference_parser(subparsers: argparse._SubParsersAction,
@@ -169,6 +174,9 @@ def add_inference_parser(subparsers: argparse._SubParsersAction,
                                 choices=config.SAGE_inductive_options,
                                 default=None)
     general_config.add_argument('--sample_when_predict',
+                                action=argparse.BooleanOptionalAction,
+                                default=None)
+    general_config.add_argument('--temporal_sampling',
                                 action=argparse.BooleanOptionalAction,
                                 default=None)
     general_config.add_argument('--seed', type=int, default=None)
