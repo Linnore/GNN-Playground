@@ -1,0 +1,6 @@
+---
+   base_model: GraphSAGE_PyG
+   overwrite:
+       framework: transductive
+       sampling_strategy: SAGE
+       lr: 

@@ -1,0 +1,4 @@
+---
+  task_type: "single-label-NC"
+  num_node_features: 3703
+  num_classes: 6

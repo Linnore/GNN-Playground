@@ -1,0 +1,9 @@
+---
+   task_type: "single-label-EC"
+   num_classes: 2
+   add_time_stamp: True
+   add_egoID: True
+   add_port: True
+   add_time_delta: False
+   ibm_split: True
+   force_reload: False
