@@ -189,7 +189,8 @@ class AMLworld(InMemoryDataset):
     def __init__(self,
                  root,
                  opt="HI-Small",
-                 readout: Literal['edge', 'node'] = 'edge',
+                 readout: Literal['edge', 'node',
+                                  'dynamic_node_label'] = 'edge',
                  split="train",
                  load_time_stamp=True,
                  load_ports=True,
@@ -293,6 +294,11 @@ class AMLworld(InMemoryDataset):
                 self._data = self._data.subgraph(nodes)
                 self._data.test_mask = torch.ones(self._data.num_nodes,
                                                   dtype=torch.bool)
+        elif readout == "dynamic_node_label":
+            # Expect the data object will have `data.node_time_label``
+            # as a tensor of shape (num_rows, 3) where each row is
+            # (node,timestamp, label)
+            self.infer_ilicit_x(self._data)
 
         # Add information to dataset object
         self.num_nodes = self._data.num_nodes
@@ -630,7 +636,6 @@ class AMLworld(InMemoryDataset):
         tr_nodes = torch.unique(tr_edge_index.view(-1))
         tr_data = tr_data.subgraph(tr_nodes)
         del tr_nodes
-        self.infer_licit_x(tr_data)
         tr_data.add_ports()
         tr_data.add_time_deltas()
         tr_data.x = z_norm(tr_data.x)
@@ -660,7 +665,6 @@ class AMLworld(InMemoryDataset):
         val_nodes = torch.unique(val_edge_index.view(-1))
         val_data = val_data.subgraph(val_nodes)
         del val_nodes
-        self.infer_licit_x(val_data)
         val_data.add_ports()
         val_data.add_time_deltas()
         val_data.x = z_norm(val_data.x)
@@ -690,7 +694,6 @@ class AMLworld(InMemoryDataset):
         te_nodes = torch.unique(te_edge_index.view(-1))
         te_data = te_data.subgraph(te_nodes)
         del te_nodes
-        self.infer_licit_x(te_data)
         te_data.add_ports()
         te_data.add_time_deltas()
         te_data.x = z_norm(te_data.x)
@@ -711,7 +714,7 @@ class AMLworld(InMemoryDataset):
         # raw_pattern_file = os.path.join(self.raw_dir,
         #                                 self.opt + "_Patterns.txt")
 
-    def infer_licit_x(self, input_data: GraphData, in_place=True):
+    def infer_ilicit_x(self, input_data: GraphData, in_place=True):
         if in_place:
             data = input_data
         else:
