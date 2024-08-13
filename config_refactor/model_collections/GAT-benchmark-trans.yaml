@@ -1,0 +1,17 @@
+base_model: GAT_Custom
+dropout: 0.6
+heads: 8
+hidden_channels_per_head: 8
+jk: null
+num_layers: 2
+output_heads: 1
+overwrite:
+  framework: transductive
+  lr: 0.005
+  sampling_strategy: None
+  weight_decay: 0.0005
+register_info:
+  description: Benchmark model from GAT paper.
+  tags:
+    v2: false
+v2: false

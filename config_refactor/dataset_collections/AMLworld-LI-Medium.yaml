@@ -1,0 +1,8 @@
+add_egoID: true
+add_port: true
+add_time_delta: false
+add_time_stamp: true
+force_reload: false
+ibm_split: true
+num_classes: 2
+task_type: single-label-EC

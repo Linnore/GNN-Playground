@@ -24,7 +24,7 @@ bash launch_mlflow.sh
 Step 2. 
 ```bash
 
-python run_pyg.py train GAT-benchmark-trans Cora
+python run_pyg.py train --model GAT-benchmark-trans --dataset Cora
 
 python run_pyg.py evaluate Cora --model GAT-benchmark-trans-Cora
 
@@ -70,7 +70,8 @@ If a customized MLflow tracking server is desired, one can configure the MLflow 
   - `tracking_uri` (required): the tracking URI of the MLflow tracking server.
   - `username` (optional): only required when the MLflow tracking server enables authentication.
   - `password` (optional): only required when the MLflow tracking server enables authentication.
-  - `experiment` (optional): specify the experiment name for logging. 
+  - `mlf_experiment` (optional): specify the experiment name for logging. 
+  - `register_model` (optional): whether register the models in the MLflow Model Registry.
 
 
 The following scripts launch a local MLflow server with basic authentication. See https://www.mlflow.org/docs/latest/tracking.html for more information of setting up an MLflow tracking server.
@@ -185,7 +186,7 @@ The current `mlflow-export-import` does not implement proper authentication for 
 
 ```bash
 
-python run_pyg.py train GraphSAGE-mean Cora 
+python run_pyg.py train --model GraphSAGE-mean --dataset Cora 
 ```
 
  - mode: must choose from `train`, `inference`

@@ -12,10 +12,13 @@ from .PNA import PNA_PyG, PNA_Custom, PNAe
 
 def filter_config_for_archive(config):
     archive_config = {
-        "general_config": copy.deepcopy(config["general_config"]),
+        "system_config": copy.deepcopy(config["system_config"]),
+        "mlflow_config": copy.deepcopy(config["mlflow_config"]),
+        "experiment_config": copy.deepcopy(config["experiment_config"]),
+        "training_config": copy.deepcopy(config["training_config"]),
         "model_config": copy.deepcopy(config["model_config"]),
         "dataset_config": copy.deepcopy(config["dataset_config"]),
-        "hyperparameters": copy.deepcopy(config["hyperparameters"]),
+        "sampling_config": copy.deepcopy(config["sampling_config"]),
     }
 
     return archive_config

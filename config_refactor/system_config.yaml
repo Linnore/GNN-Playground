@@ -1,0 +1,11 @@
+criterion: loss
+device: cpu
+framework: transductive
+framework_options:
+- transductive
+- inductive
+num_workers: 2
+persistent_workers: true
+seed: 118010142
+tqdm: false
+verbose: false

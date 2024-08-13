@@ -1,0 +1,6 @@
+auth: true
+mlf_experiment: Default
+password: password
+tracking_uri: http://127.0.0.1:8080/
+username: admin
+register_model: False

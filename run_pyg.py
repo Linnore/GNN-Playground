@@ -17,7 +17,7 @@ def main():
     args = create_parser(config)
 
     # Update configurations
-    config = update_config(dict(vars(config)), vars(args))
+    config = update_config(config, vars(args))
 
     # Setup logger
     setup_logger(args, config)
@@ -26,7 +26,7 @@ def main():
     setup_mlflow(config)
 
     # Set seed
-    set_global_seed(config["general_config"]["seed"])
+    set_global_seed(config["system_config"]["seed"])
 
     if args.mode == 'train':
         train_gnn(config)

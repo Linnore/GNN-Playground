@@ -1,0 +1,15 @@
+SAGE_inductive_option: strict
+SAGE_inductive_options:
+- default
+- strict
+- soft
+sample_when_predict: false
+sampling_strategy: None
+sampling_strategy_options:
+- SAGE
+- SAINT
+- GraphBatching
+- None
+temporal_sampling: false
+temporal_strategy: uniform
+time_attr: time

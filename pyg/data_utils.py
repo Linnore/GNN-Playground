@@ -20,11 +20,11 @@ def merge_from_data_list(data_list):
 
 
 def get_data_SAGE(config):
-    dataset_dir = config["dataset_dir"]
+    dataset_dir = config["experiment_config"]["dataset_dir"]
     dataset_transform = T.Compose([T.NormalizeFeatures()])
     batch_transform = None
 
-    dataset = config["dataset"]
+    dataset = config["experiment_config"]["dataset"]
     if dataset in ['Cora', 'CiteSeer', 'PubMed']:
         from torch_geometric.datasets import Planetoid
         dataset = Planetoid(dataset_dir,
@@ -56,7 +56,8 @@ def get_data_SAGE(config):
             merge_from_data_list(PPI(f'{dataset_dir}/PPI', split='test')),
         ]
     elif dataset.startswith("AMLworld"):
-        AMLworld_config = config["AMLworld_config"]
+        AMLworld_config = config["dataset_collections"][dataset]
+
         config["dataset_config"].update(AMLworld_config)
         logger.info(
             f"AMLworld configuration: {pprint.pformat(AMLworld_config)}")
@@ -85,7 +86,7 @@ def get_data_SAGE(config):
                          load_time_delta=AMLworld_config["add_time_delta"],
                          ibm_split=AMLworld_config["ibm_split"],
                          force_reload=force_reload,
-                         verbose=config["general_config"]["verbose"],
+                         verbose=config["system_config"]["verbose"],
                          readout=readout)[0])
             force_reload = False
 
@@ -111,7 +112,8 @@ def get_data_SAGE(config):
     else:
         raise NotImplementedError('Unsupported dataset.')
 
-    general_config = config["general_config"]
+    general_config = config["system_config"]
+    sampling_config = config["sampling_config"]
 
     # Node Classification
     task_type = config["dataset_config"]["task_type"]
@@ -126,15 +128,15 @@ def get_data_SAGE(config):
                 test_data = data
 
             elif general_config["framework"] == "inductive":
-                if general_config["SAGE_inductive_option"] in [
-                        "default", "strict"
-                ]:
+                SAGE_inductive_option = sampling_config[
+                    "SAGE_inductive_option"]
+                if SAGE_inductive_option in ["default", "strict"]:
                     logger.info(
                         "Using data split for strict inductive learning.")
                     train_data = data.subgraph(data.train_mask)
                     val_data = data.subgraph(data.val_mask)
                     test_data = data.subgraph(data.test_mask)
-                elif general_config["SAGE_inductive_option"] == "soft":
+                elif SAGE_inductive_option == "soft":
                     logger.info(
                         "Using data split for non-strict inductive learning.")
                     train_data = data.subgraph(data.train_mask)
@@ -161,7 +163,9 @@ def get_data_SAGE(config):
                 test_data = data
 
             elif general_config["framework"] == "inductive":
-                if general_config["SAGE_inductive_option"] in [
+                SAGE_inductive_option = sampling_config[
+                    "SAGE_inductive_option"]
+                if SAGE_inductive_option in [
                         "default", "strict"
                 ]:
                     logger.info(
@@ -170,7 +174,7 @@ def get_data_SAGE(config):
                     val_data = data.edge_subgraph(data.val_mask)
                     test_data = data.edge_subgraph(data.test_mask)
 
-                elif general_config["SAGE_inductive_option"] == "soft":
+                elif SAGE_inductive_option == "soft":
                     logger.info(
                         "Using data split for non-strict inductive learning.")
                     train_data = data.edge_subgraph(data.train_mask)
@@ -235,9 +239,9 @@ def get_data_SAINT(config):
 
 
 def get_data_graph_batch(config):
-    dataset_dir = config["dataset_dir"]
+    dataset_dir = config["experiment_config"]["dataset_dir"]
     batch_transform = None
-    if config["dataset"] == "PPI":
+    if config["experiment_config"]["dataset"] == "PPI":
         from torch_geometric.datasets import PPI
         train_dataset = PPI(f'{dataset_dir}/PPI', split='train')
         val_dataset = PPI(f'{dataset_dir}/PPI', split='val')
@@ -248,7 +252,9 @@ def get_data_graph_batch(config):
 
 def get_loader_SAGE(train_data, val_data, test_data, transform, config):
     model_config = config["model_config"]
-    params = config["hyperparameters"]
+    params = config["training_config"]
+    system_config = config["system_config"]
+    sampling_config = config["sampling_config"]
 
     num_neighbors = model_config.get("num_neighbors", -1)
     if isinstance(num_neighbors, int):
@@ -257,8 +263,6 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
         num_neighbors = num_neighbors
         assert len(num_neighbors) == model_config["num_layers"]
 
-    general_config = config["general_config"]
-
     logger.info(f"\ntrain_data={train_data}\n"
                 f"val_data={val_data}\ntest_data={test_data}")
 
@@ -266,10 +270,10 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
     val_mask = val_data.val_mask
     test_mask = test_data.test_mask
     task_type = config["dataset_config"]["task_type"]
-    temporal = general_config.get("temporal_sampling", None)
+    temporal = sampling_config.get("temporal_sampling", None)
     if temporal:
-        temporal_strategy = general_config.get("temporal_strategy", "uniform")
-        time_attr = general_config.get("time_attr", "time")
+        temporal_strategy = sampling_config.get("temporal_strategy", "uniform")
+        time_attr = sampling_config.get("time_attr", "time")
         train_time = eval(f"train_data.{time_attr}")
         train_time = train_time[train_mask]
         val_time = eval(f"val_data.{time_attr}")
@@ -291,13 +295,13 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             input_time=train_time,
             temporal_strategy=temporal_strategy,
             time_attr=time_attr,
-            num_workers=general_config["num_workers"],
-            persistent_workers=general_config["persistent_workers"],
+            num_workers=system_config["num_workers"],
+            persistent_workers=system_config["persistent_workers"],
             transform=transform,
             shuffle=True,
         )
 
-        if not general_config["sample_when_predict"]:
+        if not sampling_config["sample_when_predict"]:
             logger.warning(
                 "sample_when_predict is set to False. All neighbors will "
                 "be used for aggregation when doing prediction in validation "
@@ -312,8 +316,8 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             input_time=val_time,
             temporal_strategy=temporal_strategy,
             time_attr=time_attr,
-            num_workers=general_config["num_workers"],
-            persistent_workers=general_config["persistent_workers"],
+            num_workers=system_config["num_workers"],
+            persistent_workers=system_config["persistent_workers"],
             transform=transform,
         )
 
@@ -323,8 +327,8 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             batch_size=params["batch_size"],
             input_nodes=test_mask,
             input_time=test_time,
-            num_workers=general_config["num_workers"],
-            persistent_workers=general_config["persistent_workers"],
+            num_workers=system_config["num_workers"],
+            persistent_workers=system_config["persistent_workers"],
             transform=transform,
         )
 
@@ -340,10 +344,10 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             temporal_strategy=temporal_strategy,
             transform=transform,
             shuffle=True,
-            num_workers=general_config["num_workers"],
+            num_workers=system_config["num_workers"],
         )
 
-        if not general_config["sample_when_predict"]:
+        if not sampling_config["sample_when_predict"]:
             logger.warning(
                 "sample_when_predict is set to False. All neighbors will "
                 "be used for aggregation when doing prediction in validation "
@@ -360,7 +364,7 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             time_attr=time_attr,
             temporal_strategy=temporal_strategy,
             transform=transform,
-            num_workers=general_config["num_workers"],
+            num_workers=system_config["num_workers"],
         )
 
         test_loader = LinkNeighborLoader(
@@ -373,7 +377,7 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             time_attr=time_attr,
             temporal_strategy=temporal_strategy,
             transform=transform,
-            num_workers=general_config["num_workers"],
+            num_workers=system_config["num_workers"],
         )
 
     elif task_type in ["single-label-NC_by_self_loop_EC"]:
@@ -411,10 +415,11 @@ def get_loader_no_sampling(train_data, val_data, test_data, transform, config):
 
 def get_loader_graph_batch(train_dataset, val_dataset, test_dataset, transform,
                            config):
-    batch_size = config["hyperparameters"]["batch_size"]
-    general_config = config["general_config"]
+    batch_size = config["training_config"]["batch_size"]
+    system_config = config["system_config"]
+    sampling_config = config["sampling_config"]
 
-    if general_config["sampling_strategy"] == "GraphBatching" and config[
+    if sampling_config["sampling_strategy"] == "GraphBatching" and config[
             "dataset_config"]["task_type"].endswith("-EC"):
         raise NotImplementedError(
             "Graph Batching is not implemented for edge classification task!")
@@ -427,21 +432,21 @@ def get_loader_graph_batch(train_dataset, val_dataset, test_dataset, transform,
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
-        num_workers=general_config["num_workers"],
-        persistent_workers=general_config["persistent_workers"],
+        num_workers=system_config["num_workers"],
+        persistent_workers=system_config["persistent_workers"],
         shuffle=True,
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
-        num_workers=general_config["num_workers"],
-        persistent_workers=general_config["persistent_workers"],
+        num_workers=system_config["num_workers"],
+        persistent_workers=system_config["persistent_workers"],
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=batch_size,
-        num_workers=general_config["num_workers"],
-        persistent_workers=general_config["persistent_workers"],
+        num_workers=system_config["num_workers"],
+        persistent_workers=system_config["persistent_workers"],
     )
 
     # TODO: save data into loader
@@ -450,14 +455,16 @@ def get_loader_graph_batch(train_dataset, val_dataset, test_dataset, transform,
 
 
 def get_data(config):
-    if config["general_config"]["sampling_strategy"] == 'SAGE':
+    sampling_strategy = config["sampling_config"]["sampling_strategy"]
+    if sampling_strategy == 'SAGE':
         return get_data_SAGE(config)
-    elif config["general_config"]["sampling_strategy"] == 'SAINT':
+    elif sampling_strategy == 'SAINT':
         return get_data_SAINT(config)
 
 
 def get_loader(config):
-    sampling_strategy = config["general_config"]["sampling_strategy"]
+    sampling_strategy = config["sampling_config"]["sampling_strategy"]
+
     if sampling_strategy == 'SAGE':
         return get_loader_SAGE(*get_data_SAGE(config), config)
     elif sampling_strategy == 'SAINT':
@@ -469,7 +476,7 @@ def get_loader(config):
 
 
 def get_inference_data_SAGE(config):
-    dataset = config["dataset"]
+    dataset = config['experiment_config']["dataset"]
     batch_transform = None
 
     if dataset in [
@@ -525,13 +532,13 @@ def get_inference_loader_SAGE(infer_data: Data, transform, config: dict):
         num_neighbors = num_neighbors
         assert len(num_neighbors) == model_config["num_layers"]
 
-    params = config["hyperparameters"]
-
-    general_config = config["general_config"]
+    params = config["training_config"]
+    system_config = config["system_config"]
+    sampling_config = config["sampling_config"]
 
     logger.info(f"\ninference_data={infer_data}")
 
-    if not general_config["sample_when_predict"]:
+    if not sampling_config["sample_when_predict"]:
         logger.warning("sample_when_predict is set to False. "
                        "All neighbors will be used for aggregation "
                        "when doing prediction in validation and testing.")
@@ -542,8 +549,8 @@ def get_inference_loader_SAGE(infer_data: Data, transform, config: dict):
         num_neighbors=num_neighbors.copy(),
         batch_size=params["batch_size"],
         input_nodes=infer_data.infer_mask,
-        num_workers=general_config["num_workers"],
-        persistent_workers=general_config["persistent_workers"],
+        num_workers=system_config["num_workers"],
+        persistent_workers=system_config["persistent_workers"],
         transform=transform,
     )
 
@@ -576,7 +583,7 @@ def get_inference_loader_graph_batch(data: Data, config: dict):
 
 
 def get_inference_loader(config):
-    sampling_strategy = config["general_config"]["sampling_strategy"]
+    sampling_strategy = config["sampling_config"]["sampling_strategy"]
     if sampling_strategy == 'SAGE':
         return get_inference_loader_SAGE(*get_inference_data_SAGE(config),
                                          config)

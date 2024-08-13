@@ -1,0 +1,17 @@
+aggr: mean
+base_model: GraphSAGE_PyG
+dropout: 0
+hidden_channels: 64
+num_layers: 2
+num_neighbors:
+- 25
+- 10
+overwrite:
+  framework: transductive
+  lr: 0.005
+  sampling_strategy: SAGE
+  weight_decay: 0.0005
+register_info:
+  description: Benchmark GraphSAGE.
+  tags:
+    aggr: mean

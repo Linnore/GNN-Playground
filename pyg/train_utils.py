@@ -87,7 +87,7 @@ def get_pos_weight_for_BCEWithLogitsLoss(data):
 
 
 def get_weight_for_CrossEntropyLoss(data, config):
-    weight = config["hyperparameters"].get("CE_weight", "auto")
+    weight = config["training_config"].get("CE_weight", "auto")
     if weight == "auto":
         # TODO: get weights for graph batching
         y = data.y.numpy()
@@ -101,24 +101,26 @@ def get_weight_for_CrossEntropyLoss(data, config):
 
 def get_loss_fn(config, loader, reduction="mean"):
     dataset_config = config["dataset_config"]
-    if config["general_config"]["sampling_strategy"] != "GraphBatching":
+    sampling_config = config["sampling_config"]
+    training_config = config["training_config"]
+
+    if sampling_config["sampling_strategy"] != "GraphBatching":
         data = loader.data
     else:
         logger.warning(
             "Weighted loss function is not implemented for graph batching!")
-        if config["hyperparameters"]["weighted_CE"] or config[
-                "hyperparameters"]["weighted_BCE"]:
+        if training_config["weighted_CE"] or training_config["weighted_BCE"]:
             raise NotImplementedError
 
     if dataset_config["task_type"] == "single-label-NC":
-        if config["hyperparameters"]["weighted_CE"]:
+        if training_config["weighted_CE"]:
             weight = get_weight_for_CrossEntropyLoss(data, config)
         else:
             weight = None
         return torch.nn.CrossEntropyLoss(weight=weight, reduction=reduction)
 
     elif dataset_config["task_type"] == "multi-label-NC":
-        if config["hyperparameters"]["weighted_BCE"]:
+        if training_config["weighted_BCE"]:
             pos_weight = get_pos_weight_for_BCEWithLogitsLoss(data)
         else:
             pos_weight = None
@@ -126,7 +128,7 @@ def get_loss_fn(config, loader, reduction="mean"):
                                           reduction=reduction)
 
     elif dataset_config["task_type"] == "single-label-EC":
-        if config["hyperparameters"]["weighted_CE"]:
+        if training_config["weighted_CE"]:
             weight = get_weight_for_CrossEntropyLoss(data, config)
         else:
             weight = None

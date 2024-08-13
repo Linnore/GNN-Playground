@@ -1,0 +1,3 @@
+num_classes: 41
+num_node_features: 602
+task_type: single-label-NC

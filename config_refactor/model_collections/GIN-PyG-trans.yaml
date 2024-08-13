@@ -1,0 +1,15 @@
+base_model: GIN_PyG
+dropout: 0
+hidden_channels: 8
+num_MLP_layers: 2
+num_layers: 2
+overwrite:
+  framework: transductive
+  lr: 0.01
+  sample_when_predict: true
+  sampling_strategy: None
+  weight_decay: 0.0005
+register_info:
+  description: Benchmark GIN model.
+  tags:
+    GINE: false

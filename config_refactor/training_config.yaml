@@ -1,0 +1,9 @@
+CE_weight: None
+batch_size: 512
+f1_average: micro
+lr: 0.005
+num_epochs: 1000
+patience: 100
+weight_decay: 0.0005
+weighted_BCE: false
+weighted_CE: false
