@@ -477,7 +477,7 @@ class AMLworld(InMemoryDataset):
         })
 
         # Edge: transaction timestamp
-        timestamps = torch.Tensor(df_edges['Timestamp'].to_numpy()).long()
+        timestamps = torch.LongTensor(df_edges['Timestamp'].to_numpy())
 
         # Edge: transaction lable
         y = torch.tensor(df_edges['Is Laundering'].to_numpy(),
@@ -527,12 +527,12 @@ class AMLworld(InMemoryDataset):
                 timestamps[int(0.6 * len(timestamps)) - 1],
                 timestamps[int(0.8 * len(timestamps)) - 1], timestamps[-1]
             ])
-            tr_inds = torch.Tensor(
+            tr_inds = torch.LongTensor(
                 torch.where(timestamps <= split_timestamps[0])[0])
-            val_inds = torch.Tensor(
+            val_inds = torch.LongTensor(
                 torch.where((timestamps <= split_timestamps[1])
                             & (timestamps > split_timestamps[0]))[0])
-            te_inds = torch.Tensor(
+            te_inds = torch.LongTensor(
                 torch.where((timestamps <= split_timestamps[2])
                             & (timestamps > split_timestamps[1]))[0])
             split = [
@@ -818,7 +818,7 @@ class AMLworld(InMemoryDataset):
                 for x in infer_data_node:
                     tmp_timestamps_src.append(last_timestamp_src[int(x)])
 
-                tmp_timestamps_src = torch.Tensor(tmp_timestamps_src)
+                tmp_timestamps_src = torch.LongTensor(tmp_timestamps_src)
 
             if dest_dup:
 
@@ -835,13 +835,13 @@ class AMLworld(InMemoryDataset):
                     for x in infer_data_node_dst:
                         tmp_timestamps_dst.append(last_timestamp_dst[int(x)])
 
-                    tmp_timestamps_dst = torch.Tensor(tmp_timestamps_dst)
+                    tmp_timestamps_dst = torch.LongTensor(tmp_timestamps_dst)
 
-                infer_data_timestamp = torch.Tensor(
+                infer_data_timestamp = torch.LongTensor(
                     np.ravel([tmp_timestamps_src, tmp_timestamps_dst], 'F'))
-                infer_data_y = torch.Tensor(
+                infer_data_y = torch.LongTensor(
                     np.ravel([infer_data_y, infer_data_y], 'F'))
-                infer_data_node = torch.Tensor(
+                infer_data_node = torch.LongTensor(
                     np.ravel([infer_data_node, infer_data_node_dst], 'F'))
             else:
                 infer_data_timestamp = tmp_timestamps_src
