@@ -21,35 +21,42 @@ def merge_from_data_list(data_list):
 
 def get_data_SAGE(config):
     dataset_dir = config["experiment_config"]["dataset_dir"]
-    dataset_transform = T.Compose([T.NormalizeFeatures()])
+    dataset_transform = None
     batch_transform = None
 
     dataset = config["experiment_config"]["dataset"]
     if dataset in ['Cora', 'CiteSeer', 'PubMed']:
         from torch_geometric.datasets import Planetoid
+        dataset_transform = T.Compose([T.NormalizeFeatures()])
         dataset = Planetoid(dataset_dir,
                             dataset,
                             split='public',
                             transform=dataset_transform)
     elif dataset == "Reddit":
         from torch_geometric.datasets import Reddit
+        dataset_transform = T.Compose([T.NormalizeFeatures()])
         dataset = Reddit(f'{dataset_dir}/Reddit', transform=dataset_transform)
     elif dataset == "Reddit2":
         from torch_geometric.datasets import Reddit2
+        dataset_transform = T.Compose([T.NormalizeFeatures()])
         dataset = Reddit2(f'{dataset_dir}/Reddit2',
                           transform=dataset_transform)
     elif dataset == "Flickr":
         from torch_geometric.datasets import Flickr
+        dataset_transform = T.Compose([T.NormalizeFeatures()])
         dataset = Flickr(f'{dataset_dir}/Flickr', transform=dataset_transform)
     elif dataset == " Yelp":
         from torch_geometric.datasets import Yelp
+        dataset_transform = T.Compose([T.NormalizeFeatures()])
         dataset = Yelp(f'{dataset_dir}/Yelp', transform=dataset_transform)
     elif dataset == "AmazonProducts":
         from torch_geometric.datasets import AmazonProducts
+        dataset_transform = T.Compose([T.NormalizeFeatures()])
         dataset = AmazonProducts(f'{dataset_dir}/AmazonProducts',
                                  transform=dataset_transform)
     elif dataset == "PPI":
         from torch_geometric.datasets import PPI
+        dataset_transform = T.Compose([T.NormalizeFeatures()])
         dataset = [
             merge_from_data_list(PPI(f'{dataset_dir}/PPI', split='train')),
             merge_from_data_list(PPI(f'{dataset_dir}/PPI', split='val')),
@@ -65,8 +72,10 @@ def get_data_SAGE(config):
         task_type = AMLworld_config["task_type"]
         if task_type.endswith("NC"):
             readout = "node"
-        elif task_type.endswith("EC"):
+        elif task_type == "single-label-EC":
             readout = "edge"
+        elif task_type == "single-label-NC_by_self_loop_EC":
+            readout = "dynamic_node_label"
         else:
             raise NotImplementedError
 
@@ -87,7 +96,9 @@ def get_data_SAGE(config):
                          ibm_split=AMLworld_config["ibm_split"],
                          force_reload=force_reload,
                          verbose=config["system_config"]["verbose"],
-                         readout=readout)[0])
+                         readout=readout,
+                         infer_ilicit_x_kwargs=AMLworld_config[
+                             "infer_ilicit_x_kwargs"])[0])
             force_reload = False
 
         if readout == "edge":
@@ -114,9 +125,8 @@ def get_data_SAGE(config):
 
     general_config = config["system_config"]
     sampling_config = config["sampling_config"]
-
-    # Node Classification
     task_type = config["dataset_config"]["task_type"]
+    # Node Classification
     if task_type in ["single-label-NC", "multi-label-NC"]:
         # For dataset containing one graph and indicate split by mask
         if len(dataset) == 1:
@@ -152,7 +162,8 @@ def get_data_SAGE(config):
             val_data.val_mask = torch.ones(val_data.num_nodes, dtype=bool)
             test_data.test_mask = torch.ones(test_data.num_nodes, dtype=bool)
 
-    elif task_type in ["single-label-EC"]:
+    # Edge Classification
+    elif task_type in ["single-label-EC", "single-label-NC_by_self_loop_EC"]:
         # For dataset containing one graph and indicate split by mask
         if len(dataset) == 1:
             data = dataset[0]
@@ -272,7 +283,7 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
     task_type = config["dataset_config"]["task_type"]
     temporal = sampling_config.get("temporal_sampling", None)
     if temporal:
-        temporal_strategy = sampling_config.get("temporal_strategy", "uniform")
+        temporal_strategy = sampling_config.get("temporal_strategy", "last")
         time_attr = sampling_config.get("time_attr", "time")
         train_time = eval(f"train_data.{time_attr}")
         train_time = train_time[train_mask]
@@ -281,7 +292,7 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
         test_time = eval(f"test_data.{time_attr}")
         test_time = test_time[test_mask]
     else:
-        temporal_strategy = "uniform"
+        temporal_strategy = "last"
         time_attr = None
         train_time = None
         val_time = None
@@ -381,7 +392,75 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
         )
 
     elif task_type in ["single-label-NC_by_self_loop_EC"]:
-        pass
+        # Currently only support AMLworld dataset with
+        # readout==`dynamic_node_label`.
+        # Require data field:
+        #   data.node_time_label: (node, timestamp, label)
+
+        # Represent node dynamic label by self loops with timestamps
+        def prepare_for_NC_by_self_loop_EC(input_data, in_place=True):
+            if in_place:
+                data = input_data
+            else:
+                data = input_data.clone()
+
+            data.node_event = torch.concat(
+                (data.node_time_label[:, 0], data.node_time_label[:, 0]))
+            data.node_event_time = data.node_time_label[:, 1]
+            data.node_event_label = data.node_time_label[:, 2]
+            del data.node_time_label
+            if not in_place:
+                return data
+
+        prepare_for_NC_by_self_loop_EC(train_data)
+        train_loader = LinkNeighborLoader(
+            train_data,
+            num_neighbors=num_neighbors,
+            batch_size=params["batch_size"],
+            edge_label_index=train_data.node_event,
+            edge_label=train_data.node_event_label,
+            edge_label_time=train_data.node_event_time,
+            time_attr=time_attr,
+            temporal_strategy=temporal_strategy,
+            transform=transform,
+            shuffle=True,
+            num_workers=system_config["num_workers"],
+        )
+
+        if not sampling_config["sample_when_predict"]:
+            logger.warning(
+                "sample_when_predict is set to False. All neighbors will "
+                "be used for aggregation when doing prediction in validation "
+                "and testing.")
+            num_neighbors = [-1] * model_config["num_layers"]
+
+        prepare_for_NC_by_self_loop_EC(val_data)
+        val_loader = LinkNeighborLoader(
+            val_data,
+            num_neighbors=num_neighbors,
+            batch_size=params["batch_size"],
+            edge_label_index=val_data.node_event,
+            edge_label=val_data.node_event_label,
+            edge_label_time=val_data.node_event_time,
+            time_attr=time_attr,
+            temporal_strategy=temporal_strategy,
+            transform=transform,
+            num_workers=system_config["num_workers"],
+        )
+
+        prepare_for_NC_by_self_loop_EC(test_data)
+        test_loader = LinkNeighborLoader(
+            test_data,
+            num_neighbors=num_neighbors,
+            batch_size=params["batch_size"],
+            edge_label_index=test_data.node_event,
+            edge_label=test_data.node_event_label,
+            edge_label_time=test_data.node_event_time,
+            time_attr=time_attr,
+            temporal_strategy=temporal_strategy,
+            transform=transform,
+            num_workers=system_config["num_workers"],
+        )
 
     return train_loader, val_loader, test_loader
 

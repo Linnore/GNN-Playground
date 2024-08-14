@@ -41,6 +41,22 @@ def append_source_edges(batch, mask_not_in_batch, data):
     batch.num_appended = missing_e_id.shape[0]
 
 
+def append_source_nodes_by_self_loops(batch):
+    batch.edge_index = torch.hstack((batch.edge_index, batch.edge_label_index))
+    batch.y = torch.hstack((batch.y, batch.edge_label))
+
+    if hasattr(batch, 'edge_attr') and batch.edge_attr is not None:
+        batch.edge_attr = torch.vstack(
+            (batch.edge_attr,
+             torch.zeros((batch.edge_label_index, batch.edge_attr.shape[1]))))
+        if hasattr(batch, "rev_edge_attr"):
+            batch.rev_edge_attr = torch.vstack(
+                (batch.rev_edge_attr,
+                 torch.zeros(
+                     (batch.edge_label_index, batch.edge_attr.shape[1]))))
+    batch.num_appended = batch.edge_label_index.shape[1]
+
+
 def get_io_schema(sample_input: dict, dataset_config: dict):
     input_list = [
         TensorSpec(np.dtype(np.float32),
@@ -88,7 +104,7 @@ def get_pos_weight_for_BCEWithLogitsLoss(data):
 
 def get_weight_for_CrossEntropyLoss(data, config):
     weight = config["training_config"].get("CE_weight", "auto")
-    if weight == "auto":
+    if weight is None or weight == "auto":
         # TODO: get weights for graph batching
         y = data.y.numpy()
         weight = compute_class_weight(class_weight="balanced",
@@ -245,18 +261,27 @@ def edge_classification_step(mode: str,
             optimizer.zero_grad()
 
         if sampling_strategy == "SAGE":
-            # Get edges in batch that are source edges
-            batch.src_e_id = loader.data.input_id_to_e_id[batch.input_id]
-            mask = torch.isin(batch.e_id, batch.src_e_id)
-            in_batch_e_id = batch.e_id[mask]
+            if hasattr(
+                    loader.data,
+                    "readout") and loader.data.readout == "dynamic_node_label":
+                append_source_nodes_by_self_loops(batch)
+                mask = torch.range(
+                    batch.edge_index.shape[1], batch.edge_index.shape[1] +
+                    batch.edge_label_index.shape[1])
 
-            # Get source edges that are not in batch
-            mask_not_in_batch = ~torch.isin(batch.src_e_id, in_batch_e_id)
+            else:
+                # Get edges in batch that are source edges
+                batch.src_e_id = loader.data.input_id_to_e_id[batch.input_id]
+                mask = torch.isin(batch.e_id, batch.src_e_id)
+                in_batch_e_id = batch.e_id[mask]
 
-            # Append source edges that are not in batch to the batch
-            append_source_edges(batch, mask_not_in_batch, loader.data)
-            mask = torch.hstack(
-                (mask, torch.ones(batch.num_appended, dtype=torch.bool)))
+                # Get source edges that are not in batch
+                mask_not_in_batch = ~torch.isin(batch.src_e_id, in_batch_e_id)
+
+                # Append source edges that are not in batch to the batch
+                append_source_edges(batch, mask_not_in_batch, loader.data)
+                mask = torch.hstack(
+                    (mask, torch.ones(batch.num_appended, dtype=torch.bool)))
 
         elif sampling_strategy in [None, "None"]:
             mask = eval(f"batch.{mode}_mask")
@@ -319,6 +344,8 @@ def get_run_step(task_type, run_step_kwargs):
         return edge_classification_step, run_step_kwargs
     elif task_type == "multi-label-EC":
         run_step_kwargs["multilabel"] = True
+        return edge_classification_step, run_step_kwargs
+    elif task_type == "single-label-NC_by_self_loop_EC":
         return edge_classification_step, run_step_kwargs
     else:
         raise NotImplementedError("Unsupported task type for training.")
