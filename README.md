@@ -29,12 +29,19 @@ python run_pyg.py train --model GAT-benchmark-trans --dataset Cora
 python run_pyg.py evaluate Cora --model GAT-benchmark-trans-Cora
 
 python run_pyg.py inference Cora --model GAT-benchmark-trans-Cora --split test
+
+python run_pyg.py train --from_run_config run_config1.yaml
 ```
 Check `--help` for the three modes: `train`, `evaluate`, and `inference`.
 
-Advanced experiment by modifying `config.py`
+Advanced experiment by modifying `config.py`.
+
 Supported models can be found in `model_collections`.
+
 Supported datasets can be found in `dataset_collections`.
+
+Stored run configuration can be found in `\config_refactor\run`.
+
 
 #### Custom Models and Datasets
 TODO: docs and templates for customized models and datasets.

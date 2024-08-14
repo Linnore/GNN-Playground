@@ -56,7 +56,7 @@ def add_train_parser(subparsers: argparse._SubParsersAction,
 
     # Training settings
     training_config = parser.add_argument_group("Global Hyperparameters")
-    training_config.add_argument('--batch_size', type=int, default=None)
+    training_config.add_argument('--batch_size', '-b', type=int, default=None)
     training_config.add_argument('--lr', type=float, default=None)
     training_config.add_argument('--weight_decay', type=float, default=None)
 
@@ -187,8 +187,8 @@ def add_inference_parser(subparsers: argparse._SubParsersAction,
         '--framework',
         choices=config["system_config"]["framework_options"],
         default=None)
-    system_config.add_argument('--seed', type=int, default=None)
-    system_config.add_argument('--device', default=None)
+    system_config.add_argument('--seed', '-s', type=int, default=None)
+    system_config.add_argument('--device', '-d', default=None)
     system_config.add_argument('--tqdm',
                                action=argparse.BooleanOptionalAction,
                                default=None)
@@ -245,7 +245,7 @@ def add_evaluate_parser(subparsers: argparse._SubParsersAction,
                                action=argparse.BooleanOptionalAction,
                                default=None)
 
-    # sampling settings
+    # Sampling settings
     sampling_config = parser.add_argument_group("Global Sampling settings")
     sampling_config.add_argument(
         '--sampling_strategy',
@@ -405,6 +405,7 @@ def update_config(config: dict, vargs: dict):
         assert vargs["model"] is None, (
             "Only support specifying model and dataset"
             "from run_config when run_config is given!!!")
+        logger.info("Loading the run configuration")
     else:
         model = vargs["model"]
         dataset = vargs["dataset"]
