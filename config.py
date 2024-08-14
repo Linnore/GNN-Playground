@@ -478,4 +478,12 @@ class config:
         "add_time_delta": False,
         "ibm_split": True,
         "force_reload": False,
+        "infer_ilicit_x_kwargs": {
+            "num_investigation": -1,
+            "infer_timewindow": 7,
+            "infer_period": 7,
+            "infer_ratio": 1,
+            "dest_dup": False,
+            "use_investigation_time": False
+        }
     }

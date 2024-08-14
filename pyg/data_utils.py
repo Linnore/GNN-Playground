@@ -86,7 +86,9 @@ def get_data_SAGE(config):
                          ibm_split=AMLworld_config["ibm_split"],
                          force_reload=force_reload,
                          verbose=config["general_config"]["verbose"],
-                         readout=readout)[0])
+                         readout=readout,
+                         infer_ilicit_x_kwargs=AMLworld_config[
+                             "infer_ilicit_x_kwargs"])[0])
             force_reload = False
 
         if readout == "edge":

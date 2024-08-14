@@ -201,6 +201,7 @@ class AMLworld(InMemoryDataset):
                  force_download=False,
                  verbose=True,
                  ibm_split=True,
+                 infer_ilicit_x_kwargs={},
                  *args,
                  **kwargs):
         """
@@ -212,6 +213,8 @@ class AMLworld(InMemoryDataset):
         self.verbose = verbose
         self.processed_in_this_call = False
         self.ibm_split = ibm_split
+        self.infer_ilicit_x_kwargs = infer_ilicit_x_kwargs
+        self.readout = readout
 
         if not verbose:
             os.environ["TQDM_DISABLE"] = "1"
@@ -298,7 +301,9 @@ class AMLworld(InMemoryDataset):
             # Expect the data object will have `data.node_time_label``
             # as a tensor of shape (num_rows, 3) where each row is
             # (node,timestamp, label)
-            self.infer_ilicit_x(self._data)
+            # self.infer_ilicit_x(self._data, self.infer_ilicit_x_kwargs)
+            del self._data.x_label
+            del self._data.y
 
         # Add information to dataset object
         self.num_nodes = self._data.num_nodes
@@ -333,6 +338,10 @@ class AMLworld(InMemoryDataset):
             for split, file in file_dict.items():
                 file_name = os.path.splitext(file)[0]
                 file_dict[split] = f"{file_name}-ibm_split.pt"
+        if self.readout == 'dynamic_node_label':
+            for split, file in file_dict.items():
+                file_name = os.path.splitext(file)[0]
+                file_dict[split] = f"{file_name}-dynamic_node_label.pt"
         return file_dict
 
     @property
@@ -513,78 +522,122 @@ class AMLworld(InMemoryDataset):
         if self.verbose:
             self.logger.info(infor_str_list[-1])
 
-        # Data splitting
-        # irs = illicit ratios, inds = indices, trans = transactions
-        daily_irs, weighted_daily_irs, daily_inds, daily_trans = [], [], [], []
-        for day in range(n_days):
-            st = day * 24 * 3600  # start time
-            et = (day + 1) * 24 * 3600  # end time
-            day_inds = torch.where((timestamps >= st) & (timestamps < et))[0]
-            daily_irs.append(y[day_inds].float().mean())
-            weighted_daily_irs.append(y[day_inds].float().mean() *
-                                      day_inds.shape[0] / n_samples)
-            daily_inds.append(day_inds)
-            daily_trans.append(day_inds.shape[0])
+        if self.readout == "dynamic_node_label":
+            # Data splitting
 
-        split_per = [0.6, 0.2, 0.2]
-        daily_totals = np.array(daily_trans)
-        d_ts = daily_totals
-        idx = list(range(len(d_ts)))
-        split_scores = dict()
-        for i, j in itertools.combinations(idx, 2):
-            if j >= i:
-                split_totals = [
-                    d_ts[:i].sum(), d_ts[i:j].sum(), d_ts[j:].sum()
-                ]
-                split_totals_sum = np.sum(split_totals)
-                split_props = [v / split_totals_sum for v in split_totals]
-                split_error = [
-                    abs(v - t) / t for v, t in zip(split_props, split_per)
-                ]
-                score = max(split_error)  # - (split_totals_sum/total) + 1
-                split_scores[(i, j)] = score
-            else:
-                continue
+            # split_timestamps = np.cumsum(np.array(
+            #     [0.2, 0.3, 0.5])) * timestamps.max().numpy()
+            split_timestamps = np.array([
+                timestamps[int(0.6 * len(timestamps)) - 1],
+                timestamps[int(0.8 * len(timestamps)) - 1], timestamps[-1]
+            ])
+            tr_inds = torch.Tensor(
+                torch.where(timestamps <= split_timestamps[0])[0])
+            val_inds = torch.Tensor(
+                torch.where((timestamps <= split_timestamps[1])
+                            & (timestamps > split_timestamps[0]))[0])
+            te_inds = torch.Tensor(
+                torch.where((timestamps <= split_timestamps[2])
+                            & (timestamps > split_timestamps[1]))[0])
+            split = [
+                list([0, split_timestamps[0]]),
+                list([split_timestamps[0], split_timestamps[1]]),
+                list([split_timestamps[1], split_timestamps[2]])
+            ]
 
-        i, j = min(split_scores, key=split_scores.get)
-        # Split contains a list for each split (train, validation and test)
-        # and each list contains the days that are part of the respective split
-        split = [
-            list(range(i)),
-            list(range(i, j)),
-            list(range(j, len(daily_totals)))
-        ]
-        if self.verbose:
-            self.logger.info(f'Calculate split: {split}')
+        else:
+            # Data splitting
+            # irs = illicit ratios, inds = indices, trans = transactions
+            daily_irs, weighted_daily_irs, daily_inds, daily_trans = [], [], \
+                                                                    [], []
+            for day in range(n_days):
+                st = day * 24 * 3600  # start time
+                et = (day + 1) * 24 * 3600  # end time
+                day_inds = torch.where((timestamps >= st)
+                                       & (timestamps < et))[0]
+                daily_irs.append(y[day_inds].float().mean())
+                weighted_daily_irs.append(y[day_inds].float().mean() *
+                                          day_inds.shape[0] / n_samples)
+                daily_inds.append(day_inds)
+                daily_trans.append(day_inds.shape[0])
 
-        # Now, we seperate the transactions based on their
-        # indices in the timestamp array
-        split_inds = {k: [] for k in range(3)}
-        for i in range(3):
-            for day in split[i]:
-                # split_inds contains a list for each split (tr,val,te)
-                # which contains the indices of each day seperately
-                split_inds[i].append(daily_inds[day])
+            split_per = [0.6, 0.2, 0.2]
+            daily_totals = np.array(daily_trans)
+            d_ts = daily_totals
+            idx = list(range(len(d_ts)))
+            split_scores = dict()
+            for i, j in itertools.combinations(idx, 2):
+                if j >= i:
+                    split_totals = [
+                        d_ts[:i].sum(), d_ts[i:j].sum(), d_ts[j:].sum()
+                    ]
+                    split_totals_sum = np.sum(split_totals)
+                    split_props = [v / split_totals_sum for v in split_totals]
+                    split_error = [
+                        abs(v - t) / t for v, t in zip(split_props, split_per)
+                    ]
+                    score = max(split_error)  # - (split_totals_sum/total) + 1
+                    split_scores[(i, j)] = score
+                else:
+                    continue
 
-        tr_inds = torch.cat(split_inds[0])
-        val_inds = torch.cat(split_inds[1])
-        te_inds = torch.cat(split_inds[2])
+            i, j = min(split_scores, key=split_scores.get)
+            # Split contains a list for each split (train, validation and test)
+            # and each list contains the days that are part of the
+            # respective split
+            split = [
+                list(range(i)),
+                list(range(i, j)),
+                list(range(j, len(daily_totals)))
+            ]
+            if self.verbose:
+                self.logger.info(f'Calculate split: {split}')
 
-        infor_str_list.append(
-            "Total train samples: "
-            f"{tr_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-            f"{y[tr_inds].float().mean() * 100 :.2f}% || "
-            f"Train days: {split[0]}")
-        infor_str_list.append(
-            "Total val samples: "
-            f"{val_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-            f"{y[val_inds].float().mean() * 100:.2f}% || "
-            f"Val days: {split[1]}")
-        infor_str_list.append(
-            "Total test samples: "
-            f"{te_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
-            f"{y[te_inds].float().mean() * 100:.2f}% || "
-            f"Test days: {split[2]}")
+            # Now, we seperate the transactions based on their
+            # indices in the timestamp array
+            split_inds = {k: [] for k in range(3)}
+            for i in range(3):
+                for day in split[i]:
+                    # split_inds contains a list for each split (tr,val,te)
+                    # which contains the indices of each day seperately
+                    split_inds[i].append(daily_inds[day])
+
+            tr_inds = torch.cat(split_inds[0])
+            val_inds = torch.cat(split_inds[1])
+            te_inds = torch.cat(split_inds[2])
+
+        if self.readout == 'dynamic_node_label':
+            infor_str_list.append(
+                "Total train samples: "
+                f"{tr_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
+                f"{y[tr_inds].float().mean() * 100 :.2f}% || "
+                f"Train timestamps: {split[0]}")
+            infor_str_list.append(
+                "Total val samples: "
+                f"{val_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
+                f"{y[val_inds].float().mean() * 100:.2f}% || "
+                f"Val timestamps: {split[1]}")
+            infor_str_list.append(
+                "Total test samples: "
+                f"{te_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
+                f"{y[te_inds].float().mean() * 100:.2f}% || "
+                f"Test timestamps: {split[2]}")
+        else:
+            infor_str_list.append(
+                "Total train samples: "
+                f"{tr_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
+                f"{y[tr_inds].float().mean() * 100 :.2f}% || "
+                f"Train days: {split[0]}")
+            infor_str_list.append(
+                "Total val samples: "
+                f"{val_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
+                f"{y[val_inds].float().mean() * 100:.2f}% || "
+                f"Val days: {split[1]}")
+            infor_str_list.append(
+                "Total test samples: "
+                f"{te_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
+                f"{y[te_inds].float().mean() * 100:.2f}% || "
+                f"Test days: {split[2]}")
         if self.verbose:
             self.logger.info(infor_str_list[-3])
             self.logger.info(infor_str_list[-2])
@@ -636,6 +689,7 @@ class AMLworld(InMemoryDataset):
         tr_nodes = torch.unique(tr_edge_index.view(-1))
         tr_data = tr_data.subgraph(tr_nodes)
         del tr_nodes
+        self.infer_ilicit_x(tr_data, **self.infer_ilicit_x_kwargs)
         tr_data.add_ports()
         tr_data.add_time_deltas()
         tr_data.x = z_norm(tr_data.x)
@@ -665,6 +719,7 @@ class AMLworld(InMemoryDataset):
         val_nodes = torch.unique(val_edge_index.view(-1))
         val_data = val_data.subgraph(val_nodes)
         del val_nodes
+        self.infer_ilicit_x(val_data, **self.infer_ilicit_x_kwargs)
         val_data.add_ports()
         val_data.add_time_deltas()
         val_data.x = z_norm(val_data.x)
@@ -694,6 +749,7 @@ class AMLworld(InMemoryDataset):
         te_nodes = torch.unique(te_edge_index.view(-1))
         te_data = te_data.subgraph(te_nodes)
         del te_nodes
+        self.infer_ilicit_x(te_data, **self.infer_ilicit_x_kwargs)
         te_data.add_ports()
         te_data.add_time_deltas()
         te_data.x = z_norm(te_data.x)
@@ -714,16 +770,112 @@ class AMLworld(InMemoryDataset):
         # raw_pattern_file = os.path.join(self.raw_dir,
         #                                 self.opt + "_Patterns.txt")
 
-    def infer_ilicit_x(self, input_data: GraphData, in_place=True):
+    def infer_ilicit_x(self,
+                       input_data: GraphData,
+                       num_investigation: int = -1,
+                       infer_timewindow: int = 7,
+                       infer_period: int = 7,
+                       infer_ratio: float = 1.0,
+                       use_investigation_time: bool = False,
+                       dest_dup: bool = False,
+                       in_place=True):
+
         if in_place:
             data = input_data
         else:
             data = input_data.clone()
 
-        x1, x2 = data.edge_index[:, data.y.bool()]
-        data.x_label = torch.zeros(data.x.shape[0], dtype=torch.int8)
-        data.x_label[x1] = 1
-        data.x_label[x2] = 1
+        data.node_time_label = []
+        min_ts = torch.min(data.timestamps)
+        if num_investigation == -1:
+            num_investigation = (int(torch.max(data.timestamps).item()) -
+                                 infer_timewindow * 86400) // (infer_period *
+                                                               86400)
+        # self.logger.debug(num_investigation)
+        for i in range(num_investigation):
+            max_time = (i * infer_period + infer_timewindow) * 86400 + min_ts
+            min_time = (i * infer_period) * 86400 + min_ts
+
+            # self.logger.debug(torch.where((data.timestamps < max_time)))
+            # self.logger.debug(torch.where((data.timestamps < max_time) & (
+            #     data.timestamps >= min_time), True, False))
+
+            mask = torch.where(
+                (data.timestamps < max_time) & (data.timestamps >= min_time),
+                True, False).numpy()
+
+            gen = np.random.default_rng()
+
+            mask = gen.choice(mask,
+                              int(data.edge_index.shape[1] * infer_ratio),
+                              replace=False)
+
+            infer_data_y = data.y[mask]
+            infer_data_node = data.edge_index[0, mask].flatten()
+
+            if use_investigation_time:
+                infer_data_timestamp = torch.full(mask.shape, max_time)
+                tmp_timestamps_src = infer_data_timestamp
+            else:
+                infer_data_timestamp = data.timestamps[mask]
+
+                tmp_timestamps_src = []
+                last_timestamp_src = {}
+                for i, x in enumerate(infer_data_node):
+                    last_timestamp_src[int(x)] = infer_data_timestamp[i]
+
+                for x in infer_data_node:
+                    tmp_timestamps_src.append(last_timestamp_src[int(x)])
+
+                tmp_timestamps_src = torch.Tensor(tmp_timestamps_src)
+
+                # tmp_timestamps_src = torch.Tensor(
+                #     list(map(
+                #         lambda x: infer_data_timestamp[np.where(
+                #             infer_data_node == x)[-1]], infer_data_node)))
+
+            if dest_dup:
+
+                infer_data_node_dst = data.edge_index[1, mask].flatten()
+
+                if use_investigation_time:
+                    tmp_timestamps_dst = tmp_timestamps_src
+                else:
+                    tmp_timestamps_dst = []
+                    last_timestamp_dst = {}
+                    for i, x in enumerate(infer_data_node_dst):
+                        last_timestamp_dst[int(x)] = infer_data_timestamp[i]
+
+                    for x in infer_data_node_dst:
+                        tmp_timestamps_dst.append(last_timestamp_dst[int(x)])
+
+                    tmp_timestamps_dst = torch.Tensor(tmp_timestamps_dst)
+
+                    # tmp_timestamps_dst = torch.Tensor(
+                    #     list(map(
+                    #         lambda x: infer_data_timestamp[np.where(
+                    #             infer_data_node_dst == x)[-1]],
+                    #         infer_data_node_dst)))
+
+                infer_data_timestamp = torch.Tensor(
+                    np.ravel([tmp_timestamps_src, tmp_timestamps_dst], 'F'))
+                infer_data_y = torch.Tensor(
+                    np.ravel([infer_data_y, infer_data_y], 'F'))
+                infer_data_node = torch.Tensor(
+                    np.ravel([infer_data_node, infer_data_node_dst], 'F'))
+            else:
+                infer_data_timestamp = tmp_timestamps_src
+
+            data.node_time_label.append(
+                torch.vstack(
+                    (infer_data_timestamp, infer_data_node, infer_data_y)))
+
+            # self.logger.debug(
+            #     torch.vstack((infer_data_timestamp, infer_data_node,
+            #                   infer_data_y)).shape)
+
+        data.node_time_label = torch.cat(tuple(data.node_time_label), dim=1).T
+        # self.logger.debug(data.node_time_label.shape)
 
         if not in_place:
             return data
