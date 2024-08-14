@@ -1,12 +1,26 @@
+# MLflow
 mlruns/*
 mlartifacts/*
 basic_auth.db
+
+# Logs
 logs/*
+
+# Dataset
 dataset/*
+
+# Python cache
 *.DS_store
 __pycache__/
 *.py[cod]
+
+# Vscode
 .vscode/*
+
+# Output
 output/*
 registered_models/*
+
+# For experiment 
 exp.ipynb
+tmp/*
