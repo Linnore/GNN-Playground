@@ -1,0 +1,66 @@
+mlflow_config: 
+  experiment: AMLworld
+  register_model:
+    False
+    
+experiment_config: 
+  model:
+    GINe-dNC
+  dataset:
+    AMLworld-HI-Small
+    
+system_config:
+  framework: 
+    inductive
+  tqdm:
+    True
+
+training_config:
+  num_epochs: 200
+  patience: 20
+  seed: 1
+  batch_size: 8192
+  criterion: loss
+  f1_average: binary
+  weighted_CE: true
+  CE_weight:
+  - 1
+  - 6
+  lr: 0.005
+  weight_decay: 0
+  
+sampling_config: 
+  sampling_strategy:
+    SAGE
+  sample_when_predict:
+    True
+  SAGE_inductive_options:
+    soft
+  temporal_sampling: true
+  temporal_strategy: last
+  time_attr: timestamps
+
+model_config:
+  base_model: GINe
+  hidden_channels: 66
+  num_layers: 2
+  num_neighbors:
+  - 100
+  - 100
+  dropout: 0.1
+  batch_norm: true
+  edge_update: true
+  layer_mix: None
+  model_mix: Mean
+  reverse_mp: true
+  skip_connection: true
+
+AMLconfig:
+  task_type: single-label-NC_by_self_loop_EC
+  infer_timewindow: 1
+  infer_period: 1
+  add_egoID: true
+  add_port: true
+  add_time_delta: false
+  add_time_stamp: true
+  ibm_split: true

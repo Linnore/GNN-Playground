@@ -378,8 +378,14 @@ def overwrite_config(config, key, value):
 def load_run_config(config: dict):
     exp_config = config["experiment_config"]
     exp_config_file = exp_config["from_run_config"]
+    file_type = os.path.splitext(exp_config_file)[-1]
+    if file_type == "":
+        file_type = ".yaml"
+        exp_config_file += file_type
+    assert file_type == ".yaml", "The run_config must be a yaml file!!!"
     exp_config_file = os.path.join(exp_config["config_dir"], "run",
                                    exp_config_file)
+    
     with open(exp_config_file, 'r') as in_file:
         run_config = yaml.safe_load(in_file)
     return run_config

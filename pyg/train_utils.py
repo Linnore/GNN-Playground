@@ -44,17 +44,15 @@ def append_source_edges(batch, mask_not_in_batch, data):
 def append_source_nodes_by_self_loops(batch):
     batch.edge_index = torch.hstack((batch.edge_index, batch.edge_label_index))
     batch.y = torch.hstack((batch.y, batch.edge_label))
-
+    batch.num_appended = batch.edge_label_index.shape[1]
     if hasattr(batch, 'edge_attr') and batch.edge_attr is not None:
         batch.edge_attr = torch.vstack(
             (batch.edge_attr,
-             torch.zeros((batch.edge_label_index, batch.edge_attr.shape[1]))))
+             torch.zeros((batch.num_appended, batch.edge_attr.shape[1]))))
         if hasattr(batch, "rev_edge_attr"):
             batch.rev_edge_attr = torch.vstack(
                 (batch.rev_edge_attr,
-                 torch.zeros(
-                     (batch.edge_label_index, batch.edge_attr.shape[1]))))
-    batch.num_appended = batch.edge_label_index.shape[1]
+                 torch.zeros((batch.num_appended, batch.edge_attr.shape[1]))))
 
 
 def get_io_schema(sample_input: dict, dataset_config: dict):
@@ -283,10 +281,10 @@ def edge_classification_step(mode: str,
             if hasattr(
                     loader.data,
                     "readout") and loader.data.readout == "dynamic_node_label":
-                append_source_nodes_by_self_loops(batch)
-                mask = torch.range(
+                mask = torch.arange(
                     batch.edge_index.shape[1], batch.edge_index.shape[1] +
                     batch.edge_label_index.shape[1])
+                append_source_nodes_by_self_loops(batch)
 
             else:
                 # Get edges in batch that are source edges
