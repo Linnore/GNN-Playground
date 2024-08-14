@@ -1,0 +1,42 @@
+base_model: PNAe
+batch_norm: will be overwritten
+dropout: 0.1
+edge_update: true
+hidden_channels: 65
+layer_mix: None
+model_mix: Mean
+num_layers: 2
+num_neighbors:
+- 100
+- 100
+overwrite:
+  CE_weight:
+  - 1
+  - 6
+  add_egoID: true
+  add_port: true
+  add_time_delta: false
+  add_time_stamp: true
+  batch_norm: true
+  batch_size: 8192
+  criterion: loss
+  f1_average: binary
+  framework: inductive
+  ibm_split: true
+  lr: 0.005
+  num_epochs: 200
+  patience: 20
+  sampling_strategy: SAGE
+  seed: 1
+  weight_decay: 0
+  weighted_CE: true
+register_info:
+  description: PNAe in IBM MultiGNN's paper.
+  tags:
+    add_egoID: will be overwritten
+    add_port: will be overwritten
+    add_time_delta: will be overwritten
+    add_time_stamp: will be overwritten
+    batch_norm: will be overwritten
+    ibm_split: will be overwritten
+reverse_mp: false

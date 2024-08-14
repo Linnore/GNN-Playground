@@ -63,7 +63,7 @@ def overwrite_model_config(model, config):
 
 def infer_gnn(config):
     vargs = config["vargs"]
-    model_name, version = vargs["model"], vargs["version"]
+    model_name, version = vargs['experiment_config']["model"], vargs["version"]
 
     if version is None:
         client = MlflowClient()
@@ -79,7 +79,8 @@ def infer_gnn(config):
 
     # Need to overwrite the model configs from the loaded model
     overwrite_model_config(model, config)
-    general_config = config["general_config"]
+    system_config = config["system_config"]
+    sampling_config = config["sampling_config"]
     dataset_config = config["dataset_config"]
 
     loader = get_inference_loader(config)
@@ -89,17 +90,17 @@ def infer_gnn(config):
         model,
         loader,
         split=vargs['split'],
-        enable_tqdm=vargs["tqdm"],
-        sampling_strategy=general_config["sampling_strategy"],
-        device=general_config["device"],
+        enable_tqdm=vargs['system_config']["tqdm"],
+        sampling_strategy=sampling_config["sampling_strategy"],
+        device=system_config["device"],
         multilabel=True
         if dataset_config["task_type"].startswith("multi") else False)
 
     # Save predictions
-    pred_path = os.path.join(
-        vargs["output_dir"],
-        f"{config['model']}-v{version}-{config['dataset']}",
-        f"{vargs['split']}-pred") + ".csv"
+    pred_path = os.path.join(vargs["output_dir"],
+                             (f"{config['model']}-v{version}-"
+                              f"{config['experiment_config']['dataset']}"),
+                             f"{vargs['split']}-pred") + ".csv"
 
     save_dir = os.path.split(pred_path)[0]
     if not os.path.exists(save_dir):

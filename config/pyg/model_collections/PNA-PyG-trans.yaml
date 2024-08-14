@@ -1,0 +1,13 @@
+base_model: PNA_PyG
+dropout: 0.7
+hidden_channels: 64
+jk: cat
+num_layers: 2
+overwrite:
+  framework: transductive
+  lr: 0.0005
+  sampling_strategy: None
+  weight_decay: 0.001
+register_info:
+  description: Benchmark PNA model.
+  tags: {}

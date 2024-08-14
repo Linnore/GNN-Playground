@@ -1,8 +1,8 @@
 import os
+import yaml
 import argparse
 import requests
 import torch_geometric
-import config
 import sys
 import torch
 
@@ -11,66 +11,82 @@ from datetime import datetime
 
 
 def add_train_parser(subparsers: argparse._SubParsersAction,
-                     parent_parser: argparse.ArgumentParser, config: config):
+                     parent_parser: argparse.ArgumentParser, config: dict):
 
     parser = subparsers.add_parser("train",
                                    help="Train a model on a dataset.",
                                    parents=[parent_parser])
 
     # Required Field
-    parser.add_argument('model', choices=list(config.model_collections.keys()))
-    parser.add_argument('dataset',
-                        choices=list(config.dataset_collections.keys()))
+    parser.add_argument('--model',
+                        choices=list(config["model_collections"].keys()))
+    parser.add_argument('--dataset',
+                        choices=list(config["dataset_collections"].keys()))
 
-    # General settings
-    general_config = parser.add_argument_group("Global Settigns")
-    general_config.add_argument('--framework',
-                                choices=config.framework_options,
-                                default=None)
-    general_config.add_argument('--sampling_strategy',
-                                choices=config.sampling_strategy_options,
-                                default=None)
-    general_config.add_argument('--SAGE_inductive_option',
-                                choices=config.SAGE_inductive_options,
-                                default=None)
-    general_config.add_argument('--sample_when_predict',
-                                action=argparse.BooleanOptionalAction,
-                                default=None)
-    general_config.add_argument('--temporal_sampling',
-                                action=argparse.BooleanOptionalAction,
-                                default=None)
-    general_config.add_argument('--temporal_strategy', default=None)
-    general_config.add_argument('--time_attr', default=None)
-    general_config.add_argument('--seed', type=int, default=None)
-    general_config.add_argument('--device', default=None)
-    general_config.add_argument('--tqdm',
-                                action=argparse.BooleanOptionalAction,
-                                default=None)
-    general_config.add_argument('--register_model',
-                                action=argparse.BooleanOptionalAction,
-                                default=None)
-    general_config.add_argument('--criterion',
-                                type=str,
-                                default=None,
-                                choices=["loss", "accuracy", "f1"])
-    general_config.add_argument('--num_epochs', type=int, default=None)
-    general_config.add_argument('--patience', type=int, default=None)
-    general_config.add_argument('--num_workers', type=int, default=None)
-    general_config.add_argument('--verbose',
-                                action=argparse.BooleanOptionalAction,
-                                default=None)
+    # Experiment settings
+    experiment_config = parser.add_argument_group("Experiment Configurations")
+    experiment_config.add_argument('--register_model',
+                                   action=argparse.BooleanOptionalAction,
+                                   default=None)
+    experiment_config.add_argument('--from_run_config', type=str, default=None)
 
-    # General hyperparameters
-    hyperparameters = parser.add_argument_group("Global Hyperparameters")
-    hyperparameters.add_argument('--batch_size', type=int, default=None)
-    hyperparameters.add_argument('--lr', type=float, default=None)
-    hyperparameters.add_argument('--weight_decay', type=float, default=None)
+    # System settings
+    system_config = parser.add_argument_group("System Configurations")
+    system_config.add_argument(
+        '--framework',
+        '-w',
+        choices=config["system_config"]["framework_options"],
+        default=None)
+    system_config.add_argument('--seed', '-s', type=int, default=None)
+    system_config.add_argument('--device', '-d', default=None)
+    system_config.add_argument('--tqdm',
+                               action=argparse.BooleanOptionalAction,
+                               default=None)
+    system_config.add_argument('--num_workers', type=int, default=None)
+    system_config.add_argument('--verbose',
+                               action=argparse.BooleanOptionalAction,
+                               default=None)
+    system_config.add_argument('--criterion',
+                               type=str,
+                               default=None,
+                               choices=["loss", "accuracy", "f1"])
+    system_config.add_argument('--persistent_workers',
+                               action=argparse.BooleanOptionalAction,
+                               default=None)
 
-    # Loss function hyperparameters
-    hyperparameters.add_argument('--weighted_BCE',
+    # Training settings
+    training_config = parser.add_argument_group("Global Hyperparameters")
+    training_config.add_argument('--batch_size', '-b', type=int, default=None)
+    training_config.add_argument('--lr', type=float, default=None)
+    training_config.add_argument('--weight_decay', type=float, default=None)
+
+    training_config.add_argument('--weighted_BCE',
                                  action=argparse.BooleanOptionalAction,
                                  default=None)
-    hyperparameters.add_argument('--weighted_CE',
+    training_config.add_argument('--CE_weight', type=float, default=None)
+    training_config.add_argument('--weighted_CE',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
+    training_config.add_argument('--f1_average', type=str, default=None)
+    training_config.add_argument('--num_epochs', type=int, default=None)
+    training_config.add_argument('--patience', type=int, default=None)
+
+    # sampling settings
+    sampling_config = parser.add_argument_group("Global Sampling settings")
+    sampling_config.add_argument(
+        '--sampling_strategy',
+        choices=config["sampling_config"]["sampling_strategy_options"],
+        default=None)
+    sampling_config.add_argument('--temporal_sampling',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
+    sampling_config.add_argument('--temporal_strategy', default=None)
+    sampling_config.add_argument('--time_attr', default=None)
+    sampling_config.add_argument(
+        '--SAGE_inductive_option',
+        choices=config["sampling_config"]["SAGE_inductive_options"],
+        default=None)
+    sampling_config.add_argument('--sample_when_predict',
                                  action=argparse.BooleanOptionalAction,
                                  default=None)
 
@@ -126,13 +142,16 @@ def add_train_parser(subparsers: argparse._SubParsersAction,
                                  action=argparse.BooleanOptionalAction,
                                  default=None)
     AMLworld_config.add_argument('--task_type',
-                                 choices=config.task_type_options,
+                                 choices=[
+                                     "single-label-NC",
+                                     "multi-label-NC",
+                                     "single-label-EC",
+                                 ],
                                  default=None)
 
 
 def add_inference_parser(subparsers: argparse._SubParsersAction,
-                         parent_parser: argparse.ArgumentParser,
-                         config: config):
+                         parent_parser: argparse.ArgumentParser, config):
     parser = subparsers.add_parser(
         "inference",
         help="Inference on a dataset's test split using a "
@@ -140,8 +159,8 @@ def add_inference_parser(subparsers: argparse._SubParsersAction,
         parents=[parent_parser])
 
     # Required Field
-    parser.add_argument('dataset',
-                        choices=list(config.dataset_collections.keys()))
+    parser.add_argument('--dataset',
+                        choices=list(config["dataset_collections"].keys()))
 
     parser.add_argument(
         '--model', help="Model name of the registerted model to evaluate.")
@@ -162,44 +181,49 @@ def add_inference_parser(subparsers: argparse._SubParsersAction,
         '{split_name}_mask to get the split for inference.')
     parser.add_argument('--output_dir', default="./output")
 
-    # General settings
-    general_config = parser.add_argument_group("Global Settigns")
-    general_config.add_argument('--framework',
-                                choices=config.framework_options,
-                                default=None)
-    general_config.add_argument('--sampling_strategy',
-                                choices=config.sampling_strategy_options,
-                                default=None)
-    general_config.add_argument('--SAGE_inductive_option',
-                                choices=config.SAGE_inductive_options,
-                                default=None)
-    general_config.add_argument('--sample_when_predict',
-                                action=argparse.BooleanOptionalAction,
-                                default=None)
-    general_config.add_argument('--temporal_sampling',
-                                action=argparse.BooleanOptionalAction,
-                                default=None)
-    general_config.add_argument('--seed', type=int, default=None)
-    general_config.add_argument('--device', default=None)
-    general_config.add_argument('--tqdm',
-                                action=argparse.BooleanOptionalAction,
-                                default=None)
-    general_config.add_argument('--verbose',
-                                action=argparse.BooleanOptionalAction,
-                                default=None)
+    # System settings
+    system_config = parser.add_argument_group("System Settings")
+    system_config.add_argument(
+        '--framework',
+        choices=config["system_config"]["framework_options"],
+        default=None)
+    system_config.add_argument('--seed', '-s', type=int, default=None)
+    system_config.add_argument('--device', '-d', default=None)
+    system_config.add_argument('--tqdm',
+                               action=argparse.BooleanOptionalAction,
+                               default=None)
+    system_config.add_argument('--verbose',
+                               action=argparse.BooleanOptionalAction,
+                               default=None)
+
+    # sampling settings
+    sampling_config = parser.add_argument_group("Global Sampling settings")
+    sampling_config.add_argument(
+        '--sampling_strategy',
+        choices=config["sampling_config"]["sampling_strategy_options"],
+        default=None)
+    sampling_config.add_argument(
+        '--SAGE_inductive_option',
+        choices=config["sampling_config"]["SAGE_inductive_options"],
+        default=None)
+    sampling_config.add_argument('--sample_when_predict',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
+    sampling_config.add_argument('--temporal_sampling',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
 
 
 def add_evaluate_parser(subparsers: argparse._SubParsersAction,
-                        parent_parser: argparse.ArgumentParser,
-                        config: config):
+                        parent_parser: argparse.ArgumentParser, config):
     parser = subparsers.add_parser(
         "evaluate",
         help="Evaluate a registered model on a dataset",
         parents=[parent_parser])
 
     # Required Field
-    parser.add_argument('dataset',
-                        choices=list(config.dataset_collections.keys()))
+    parser.add_argument('--dataset',
+                        choices=list(config["dataset_collections"].keys()))
 
     parser.add_argument(
         '--model', help="Model name of the registerted model to evaluate.")
@@ -208,25 +232,32 @@ def add_evaluate_parser(subparsers: argparse._SubParsersAction,
                         default=None,
                         help='Use the latest version if not specified.')
 
-    # General settings
-    general_config = parser.add_argument_group("Global Settigns")
-    general_config.add_argument('--framework',
-                                choices=config.framework_options,
-                                default=None)
-    general_config.add_argument('--sampling_strategy',
-                                choices=config.sampling_strategy_options,
-                                default=None)
-    general_config.add_argument('--SAGE_inductive_option',
-                                choices=config.SAGE_inductive_options,
-                                default=None)
-    general_config.add_argument('--sample_when_predict',
-                                action=argparse.BooleanOptionalAction,
-                                default=None)
-    general_config.add_argument('--seed', type=int, default=None)
-    general_config.add_argument('--device', default=None)
-    general_config.add_argument('--tqdm',
-                                action=argparse.BooleanOptionalAction,
-                                default=None)
+    # System settings
+    system_config = parser.add_argument_group("System Configuration")
+    system_config.add_argument(
+        '--framework',
+        choices=config["system_config"]["framework_options"],
+        default=None)
+
+    system_config.add_argument('--seed', type=int, default=None)
+    system_config.add_argument('--device', default=None)
+    system_config.add_argument('--tqdm',
+                               action=argparse.BooleanOptionalAction,
+                               default=None)
+
+    # Sampling settings
+    sampling_config = parser.add_argument_group("Global Sampling settings")
+    sampling_config.add_argument(
+        '--sampling_strategy',
+        choices=config["sampling_config"]["sampling_strategy_options"],
+        default=None)
+    sampling_config.add_argument(
+        '--SAGE_inductive_option',
+        choices=config["sampling_config"]["SAGE_inductive_options"],
+        default=None)
+    sampling_config.add_argument('--sample_when_predict',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
 
     # AMLworld configuration.
     # Allow evaluate on a different splitting setting to the training one
@@ -239,7 +270,7 @@ def add_evaluate_parser(subparsers: argparse._SubParsersAction,
                                  default=None)
 
 
-def create_parser(config: config):
+def create_parser(config: dict):
     parser = argparse.ArgumentParser(
         "Run GNN experiments implemented using Pytorch Geometric.")
 
@@ -253,7 +284,7 @@ def create_parser(config: config):
     mlflow_config.add_argument('--tracking_uri', default=None)
     mlflow_config.add_argument('--username', default=None)
     mlflow_config.add_argument('--password', default=None)
-    mlflow_config.add_argument('--experiment', default=None)
+    mlflow_config.add_argument('--mlf_experiment', default=None)
     mlflow_config.add_argument(
         '--auth',
         action=argparse.BooleanOptionalAction,
@@ -281,6 +312,7 @@ def set_global_seed(seed):
 
 def setup_mlflow(config):
     # MLFlow
+
     mlflow_config = config["mlflow_config"]
     os.environ["MLFLOW_TRACKING_URI"] = mlflow_config['tracking_uri']
     if mlflow_config["auth"]:
@@ -300,8 +332,31 @@ def setup_mlflow(config):
                                       f"at {mlflow_config['tracking_uri']}!")
 
 
-def init_config():
-    from config import config
+def init_config() -> dict:
+    curr_dir = os.getcwd()
+    config = {}
+
+    config_dir = os.path.join(curr_dir, 'config/pyg')
+    for path in os.listdir(config_dir):
+        # For config/pyg/*.yaml
+        file_name, file_type = os.path.splitext(path)
+        if file_type == ".yaml":
+            config_name = file_name
+            with open(os.path.join(config_dir, path), 'r') as config_file:
+                config[config_name] = yaml.safe_load(config_file)
+
+        # For config/pyg/$folder/*.yaml
+        elif os.path.isdir(os.path.join(config_dir, path)):
+            config[path] = {}  # path is folder name
+            config_sub_dir = os.path.join(config_dir, path)
+            for sub_path in os.listdir(config_sub_dir):
+                file_name, file_type = os.path.splitext(sub_path)
+                if file_type == ".yaml":
+                    collection_name = file_name
+                    with open(os.path.join(config_sub_dir, sub_path),
+                              'r') as collection_config:
+                        config[path][collection_name] = yaml.safe_load(
+                            collection_config)
     return config
 
 
@@ -320,22 +375,62 @@ def overwrite_config(config, key, value):
         config[key] = value
 
 
-def update_config(config: dict, vargs: dict):
-    config["mode"] = vargs["mode"]
-    config["model"] = vargs["model"]
-    config["dataset"] = vargs["dataset"]
+def load_run_config(config: dict):
+    exp_config = config["experiment_config"]
+    exp_config_file = exp_config["from_run_config"]
+    exp_config_file = os.path.join(exp_config["config_dir"], "run",
+                                   exp_config_file)
+    with open(exp_config_file, 'r') as in_file:
+        run_config = yaml.safe_load(in_file)
+    return run_config
 
-    if config["mode"] == "train":
-        model_overwrite_config = config["model_collections"][
-            config["model"]].pop("overwrite", {})
+
+def unpack_nested_dict(my_dict: dict, new_dict: dict):
+    for key, value in my_dict.items():
+        if isinstance(value, dict):
+            unpack_nested_dict(value, new_dict)
+        else:
+            new_dict[key] = value
+
+
+def update_config(config: dict, vargs: dict):
+    config["experiment_config"]["config_dir"] = "./config/pyg"
+    config["experiment_config"]["from_run_config"] = vargs["from_run_config"]
+    config["experiment_config"]["mode"] = vargs["mode"]
+
+    if vargs["from_run_config"]:
+        run_config = load_run_config(config)
+        model = run_config["experiment_config"]["model"]
+        dataset = run_config["experiment_config"]["dataset"]
+        assert vargs["model"] is None, (
+            "Only support specifying model and dataset"
+            "from run_config when run_config is given!!!")
+        logger.info("Loading the run configuration")
+    else:
+        model = vargs["model"]
+        dataset = vargs["dataset"]
+
+    config["experiment_config"]["model"] = model
+    config["experiment_config"]["dataset"] = dataset
+
+    mode = config["experiment_config"]["mode"]
+
+    if mode == "train":
+        model_overwrite_config = config["model_collections"][model].pop(
+            "overwrite", {})
         config = overwrite_config_from_vargs(config, model_overwrite_config)
+
+    if vargs["from_run_config"]:
+        unpacked_run_config = {}
+        unpack_nested_dict(run_config, unpacked_run_config)
+        config = overwrite_config_from_vargs(config, unpacked_run_config)
 
     config = overwrite_config_from_vargs(config, vargs)
 
-    if config["mode"] == "train":
-        config["model_config"] = config["model_collections"][config["model"]]
+    if mode == "train":
+        config["model_config"] = config["model_collections"][model]
 
-    config["dataset_config"] = config["dataset_collections"][config["dataset"]]
+    config["dataset_config"] = config["dataset_collections"][dataset]
 
     config["vargs"] = vargs
 

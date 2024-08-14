@@ -1,0 +1,29 @@
+mlflow_config: 
+  experiment: Default
+  register_model:
+    False
+    
+experiment_config: 
+  model:
+    GINe-in
+  dataset:
+    AMLworld-HI-Small
+    
+system_config:
+  framework:
+    transductive
+  tqdm:
+    True
+
+training_config:
+  num_epochs: 10
+  
+sampling_config: 
+  sampling_strategy:
+    SAGE
+  sample_when_predict:
+    True
+  SAGE_inductive_options:
+    soft
+  
+

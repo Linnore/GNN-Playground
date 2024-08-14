@@ -19,20 +19,27 @@ from mlflow.models.signature import ModelSignature
 
 def train_gnn(config):
     mlflow_config = config["mlflow_config"]
-    general_config = config["general_config"]
-    device = general_config["device"]
+    system_config = config["system_config"]
+    training_config = config["training_config"]
+    experiment_config = config["experiment_config"]
+    sampling_config = config["sampling_config"]
+
+    device = system_config["device"]
     dataset_config = config["dataset_config"]
     model_config = config["model_config"]
     register_info = model_config.pop("register_info", {})
 
     # Initialize MLflow Logging
-    logger.info(f"Launching experiment: {mlflow_config['experiment']}")
-    mlflow.set_experiment(mlflow_config["experiment"])
-    run_name = f"{config['model']}-{config['dataset']}"
+    logger.info(f"Launching experiment: {mlflow_config['mlf_experiment']}")
+    mlflow.set_experiment(mlflow_config["mlf_experiment"])
+    run_name = (f"{experiment_config['model']}"
+                f"-{experiment_config['dataset']}")
+
     model_name = run_name
     run = mlflow.start_run(run_name=run_name, log_system_metrics=True)
     mlflow.set_tag("base model", model_config["base_model"])
-    mlflow.set_tag("dataset", config["dataset"])
+    mlflow.set_tag("dataset", experiment_config)
+
     logger.info(f"Launching run: {run.info.run_name}")
 
     # Get loaders
@@ -43,17 +50,19 @@ def train_gnn(config):
     model.reset_parameters()
 
     # Log hyperparameters
-    params = config["hyperparameters"]
-    params.update(model_config)
-    params_str = pprint.pformat(params)
-    general_config_str = pprint.pformat(general_config)
+    # training_config = config["training_config"]
+    training_config.update(model_config)
+    params_str = pprint.pformat(training_config)
+    system_config_str = pprint.pformat(system_config)
     datsset_info_str = pprint.pformat(model.config['dataset_config'])
-    logger.info(f"General configurations:\n{general_config_str}")
+    logger.info(f"General configurations:\n{system_config_str}")
     logger.info(f"Hyperparameters:\n{params_str}")
     logger.info(f"Dataset information: {datsset_info_str}")
-    mlflow.log_params(model.config["general_config"])
+    mlflow.log_params(model.config["system_config"])
     mlflow.log_params(model.config["dataset_config"])
-    mlflow.log_params(model.config["hyperparameters"])
+    mlflow.log_params(model.config["training_config"])
+    mlflow.log_params(model.config["experiment_config"])
+    mlflow.log_params(model.config["sampling_config"])
     mlflow.log_params(model.config["model_config"])
 
     # Setup loss function
@@ -78,37 +87,37 @@ def train_gnn(config):
 
     # Setup Optimizer
     optimizer = torch.optim.Adam(model.parameters(),
-                                 lr=params["lr"],
-                                 weight_decay=params["weight_decay"])
+                                 lr=training_config["lr"],
+                                 weight_decay=training_config["weight_decay"])
 
     # Setup metrics
-    criterion = general_config["criterion"].lower()
+    criterion = system_config["criterion"].lower()
     if criterion == "loss":
         best_value = -2147483647
     elif criterion == "f1":
         best_value = -1
 
     # Training loop
-    patience = general_config["patience"]
+    patience = training_config["patience"]
     if patience is None or patience <= 0:
-        patience = general_config["num_epochs"]
+        patience = training_config["num_epochs"]
 
     # Setup training steps according to task type
     run_step_kwargs = dict(
         model=model,
         loss_fn=loss_fn,
         optimizer=optimizer,
-        sampling_strategy=config["general_config"]["sampling_strategy"],
-        enable_tqdm=general_config["tqdm"],
+        sampling_strategy=sampling_config["sampling_strategy"],
+        enable_tqdm=system_config["tqdm"],
         device=device,
         reverse_mp=reverse_mp,
-        f1_average=general_config["f1_average"])
+        f1_average=training_config["f1_average"])
     run_step, run_step_kwargs = get_run_step(dataset_config["task_type"],
                                              run_step_kwargs)
 
     best_epoch = 0
-    for epoch in range(1, 1 + general_config["num_epochs"]):
-        if general_config["tqdm"]:
+    for epoch in range(1, 1 + training_config["num_epochs"]):
+        if system_config["tqdm"]:
             print(f"Epoch {epoch}:")
 
         # Training
@@ -172,7 +181,7 @@ def train_gnn(config):
     os.remove(save_path)
 
     # Register the model
-    if general_config["register_model"]:
+    if mlflow_config["register_model"]:
         model_uri = f"runs:/{run.info.run_id}/{model_name}"
         reg_model = mlflow.register_model(model_uri=model_uri,
                                           name=model_name,

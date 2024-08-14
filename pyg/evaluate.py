@@ -73,9 +73,10 @@ def overwrite_model_config(model, config):
     overwrite_config_from_vargs(config, unpacked_model_config)
 
     vargs = config.pop("vargs", {})
-    config["mode"] = vargs["mode"]
-    config["model"] = vargs["model"]
-    config["dataset"] = vargs["dataset"]
+    config["experiment_config"]["mode"] = vargs["experiment_config"]["mode"]
+    config["experiment_config"]["model"] = vargs["experiment_config"]["model"]
+    config["experiment_config"]["dataset"] = vargs["experiment_config"][
+        "dataset"]
     config = overwrite_config_from_vargs(config, vargs)
     config["vargs"] = vargs
 
@@ -177,7 +178,7 @@ def eval_edge_classification(split,
 
 def eval_gnn(config):
     vargs = config["vargs"]
-    model_name, version = vargs["model"], vargs["version"]
+    model_name, version = vargs["experiment_config"]["model"], vargs["version"]
 
     if version is None:
         client = MlflowClient()
@@ -193,7 +194,8 @@ def eval_gnn(config):
 
     # Need to overwrite the model configs from the loaded model
     overwrite_model_config(model, config)
-    general_config = config["general_config"]
+    system_config = config["system_config"]
+    sampling_config = config["sampling_config"]
     dataset_config = config["dataset_config"]
 
     train_loader, val_loader, test_loader = get_loader(config)
@@ -211,9 +213,9 @@ def eval_gnn(config):
             split,
             model,
             loader,
-            enable_tqdm=general_config["tqdm"],
-            sampling_strategy=general_config["sampling_strategy"],
-            device=general_config["device"],
+            enable_tqdm=system_config["tqdm"],
+            sampling_strategy=sampling_config["sampling_strategy"],
+            device=system_config["device"],
             multilabel=True if task_type.startswith("multi") else False,
             reverse_mp=config["model_config"].get("reverse_mp", False))
 
@@ -225,8 +227,9 @@ def eval_gnn(config):
     info_message = "\n".join(info_message)
     logger.info(info_message)
 
-    report_path = os.path.join(dst_path,
-                               f"Evalution_report_{config['dataset']}.txt")
+    report_path = os.path.join(
+        dst_path,
+        f"Evalution_report_{config['experiment_config']['dataset']}.txt")
     logger.info(f"Evaluation reports are saved at {report_path}")
     with open(report_path, "w") as out_file:
         out_file.write(info_message)
