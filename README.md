@@ -40,7 +40,7 @@ Supported models can be found in `model_collections`.
 
 Supported datasets can be found in `dataset_collections`.
 
-Stored run configuration can be found in `\config_refactor\run`.
+Stored run configuration can be found in `\config\pyg\run`.
 
 
 #### Custom Models and Datasets

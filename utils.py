@@ -336,7 +336,7 @@ def init_config() -> dict:
     curr_dir = os.getcwd()
     config = {}
 
-    config_dir = os.path.join(curr_dir, 'config_refactor')
+    config_dir = os.path.join(curr_dir, 'config/pyg')
     for path in os.listdir(config_dir):
         # For config/pyg/*.yaml
         file_name, file_type = os.path.splitext(path)
@@ -394,7 +394,7 @@ def unpack_nested_dict(my_dict: dict, new_dict: dict):
 
 
 def update_config(config: dict, vargs: dict):
-    config["experiment_config"]["config_dir"] = "./config_refactor"
+    config["experiment_config"]["config_dir"] = "./config/pyg"
     config["experiment_config"]["from_run_config"] = vargs["from_run_config"]
     config["experiment_config"]["mode"] = vargs["mode"]
 

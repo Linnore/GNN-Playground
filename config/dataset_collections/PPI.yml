@@ -1,4 +1,0 @@
----
-  task_type: "multi-label-NC"
-  num_node_features: 50
-  num_classes: 121
