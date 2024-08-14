@@ -416,22 +416,38 @@ def update_config(config: dict, vargs: dict):
     mode = config["experiment_config"]["mode"]
 
     if mode == "train":
-        model_overwrite_config = config["model_collections"][model].pop(
-            "overwrite", {})
-        config = overwrite_config_from_vargs(config, model_overwrite_config)
+        if vargs["from_run_config"]:
+            if model in config["model_collections"]:
+                logger.warning(f"The model name in {vargs['from_run_config']} "
+                               "exists in pre-defined model collections."
+                               "This run will overwrite the configuration of"
+                               "the configurapre-defined model!!!")
+                config["model_config"] = config["model_collections"][model]
+                model_overwrite_config = config["model_collections"][
+                    model].pop("overwrite", {})
+                config = overwrite_config_from_vargs(config,
+                                                     model_overwrite_config)
+            else:
+                config["model_config"] = run_config.get("model_config", None)
+                if config["model_config"] is None:
+                    raise KeyError(
+                        f"Missing model_config in {vargs['from_run_config']}!!"
+                    )
 
-    if vargs["from_run_config"]:
-        unpacked_run_config = {}
-        unpack_nested_dict(run_config, unpacked_run_config)
-        config = overwrite_config_from_vargs(config, unpacked_run_config)
+            unpacked_run_config = {}
+            unpack_nested_dict(run_config, unpacked_run_config)
+            config = overwrite_config_from_vargs(config, unpacked_run_config)
+            config = overwrite_config_from_vargs(config, vargs)
 
-    config = overwrite_config_from_vargs(config, vargs)
-
-    if mode == "train":
-        config["model_config"] = config["model_collections"][model]
+        else:
+            model_overwrite_config = config["model_collections"][model].pop(
+                "overwrite", {})
+            config = overwrite_config_from_vargs(config,
+                                                 model_overwrite_config)
+            config = overwrite_config_from_vargs(config, vargs)
+            config["model_config"] = config["model_collections"][model]
 
     config["dataset_config"] = config["dataset_collections"][dataset]
-
     config["vargs"] = vargs
 
     return config
