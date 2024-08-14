@@ -114,8 +114,10 @@ class GraphData(Data):
         self.loss_fn = 'ce'
         self.num_nodes = int(self.x.shape[0])
         self.node_timestamps = node_timestamps
+        if node_timestamps:
+            self.node_timestamps = node_timestamps.long()
         if timestamps is not None:
-            self.timestamps = timestamps
+            self.timestamps = timestamps.long()
         elif edge_attr is not None:
             self.timestamps = edge_attr[:, 0].clone()
         else:
@@ -475,7 +477,7 @@ class AMLworld(InMemoryDataset):
         })
 
         # Edge: transaction timestamp
-        timestamps = torch.Tensor(df_edges['Timestamp'].to_numpy())
+        timestamps = torch.Tensor(df_edges['Timestamp'].to_numpy()).long()
 
         # Edge: transaction lable
         y = torch.tensor(df_edges['Is Laundering'].to_numpy(),

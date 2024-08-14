@@ -401,10 +401,12 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             else:
                 data = input_data.clone()
 
-            data.node_event = torch.concat(
-                (data.node_time_label[:, 0], data.node_time_label[:, 0]))
-            data.node_event_time = data.node_time_label[:, 1]
-            data.node_event_label = data.node_time_label[:, 2]
+            data.node_event = torch.cat(
+                (data.node_time_label[:, 0].unsqueeze(0),
+                 data.node_time_label[:, 0].unsqueeze(0)),
+                dim=0).long()
+            data.node_event_time = data.node_time_label[:, 1].long()
+            data.node_event_label = data.node_time_label[:, 2].long()
             del data.node_time_label
             if not in_place:
                 return data

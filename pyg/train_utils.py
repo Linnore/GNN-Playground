@@ -141,12 +141,16 @@ def get_loss_fn(config, loader, reduction="mean"):
         return torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight,
                                           reduction=reduction)
 
-    elif dataset_config["task_type"] == "single-label-EC":
+    elif dataset_config["task_type"] in [
+            "single-label-EC", "single-label-NC_by_self_loop_EC"
+    ]:
         if config["hyperparameters"]["weighted_CE"]:
             weight = get_weight_for_CrossEntropyLoss(data, config)
         else:
             weight = None
         return torch.nn.CrossEntropyLoss(weight=weight, reduction=reduction)
+    else:
+        raise NotImplementedError
 
 
 def infer_licit_x(edge_index, edge_label):
