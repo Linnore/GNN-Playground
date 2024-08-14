@@ -302,7 +302,6 @@ class AMLworld(InMemoryDataset):
         elif readout == "dynamic_node_label":
 
             del self._data.x_label
-            del self._data.y
 
         # Add information to dataset object
         self.num_nodes = self._data.num_nodes
