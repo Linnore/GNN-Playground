@@ -46,10 +46,6 @@ def add_train_parser(subparsers: argparse._SubParsersAction,
     system_config.add_argument('--verbose',
                                action=argparse.BooleanOptionalAction,
                                default=None)
-    system_config.add_argument('--criterion',
-                               type=str,
-                               default=None,
-                               choices=["loss", "accuracy", "f1"])
     system_config.add_argument('--persistent_workers',
                                action=argparse.BooleanOptionalAction,
                                default=None)
@@ -67,6 +63,10 @@ def add_train_parser(subparsers: argparse._SubParsersAction,
     training_config.add_argument('--weighted_CE',
                                  action=argparse.BooleanOptionalAction,
                                  default=None)
+    training_config.add_argument('--criterion',
+                                 type=str,
+                                 default=None,
+                                 choices=["loss", "accuracy", "f1", "auc"])
     training_config.add_argument('--f1_average', type=str, default=None)
     training_config.add_argument('--num_epochs', type=int, default=None)
     training_config.add_argument('--patience', type=int, default=None)

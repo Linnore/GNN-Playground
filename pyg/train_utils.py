@@ -5,7 +5,7 @@ import numpy as np
 
 from tqdm import tqdm
 from loguru import logger
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, roc_auc_score
 from sklearn.utils.class_weight import compute_class_weight
 
 from mlflow.types.schema import Schema, TensorSpec
@@ -155,23 +155,6 @@ def get_loss_fn(config, loader, reduction="mean"):
         raise NotImplementedError
 
 
-def infer_licit_x(edge_index, edge_label):
-    pass
-
-
-def node_metrics_for_node_readout():
-    pass
-
-
-def node_metrics_for_edge_readout(truth_e, prediction_e, f1_average="binary"):
-
-    pass
-
-
-def edge_metrics_for_edge_readout():
-    pass
-
-
 def node_classification_step(mode: str,
                              epoch,
                              loader,
@@ -184,11 +167,16 @@ def node_classification_step(mode: str,
                              multilabel=False,
                              threshold=0,
                              reverse_mp=False,
-                             f1_average="micro"):
+                             compute_f1=False,
+                             compute_auc=False,
+                             f1_average="micro",
+                             auc_average="macro"):
     total_loss = 0
     total_num = 0
     predictions = []
     truths = []
+    if compute_auc:
+        prob_scores = []
     bar = tqdm(loader, total=len(loader), disable=not enable_tqdm)
     for batch in bar:
         if mode == "train":
@@ -216,10 +204,17 @@ def node_classification_step(mode: str,
 
         if multilabel:
             preds = outputs > threshold
+            if compute_auc:
+                scores = torch.sigmoid(outputs)
         else:
             preds = outputs.argmax(dim=-1)
+            if compute_auc:
+                scores = torch.softmax(outputs, dim=-1)
+
         predictions.append(preds.detach().cpu().numpy())
         truths.append(targets.detach().cpu().numpy())
+        if compute_auc:
+            prob_scores.append(scores.detach().cpu().numpy())
 
         loss = loss.detach().cpu().item()
         num_targets = outputs.numel()
@@ -228,16 +223,32 @@ def node_classification_step(mode: str,
         bar.set_description(f"{mode}_loss={loss:<8.6g}")
 
     # Metrics
+    results = {}
     predictions = np.concatenate(predictions)
     truths = np.concatenate(truths)
+    if compute_auc:
+        prob_scores = np.concatenate(prob_scores)
 
     avg_loss = total_loss / total_num
     mlflow.log_metric(f"{mode} loss", avg_loss, epoch)
 
-    f1 = f1_score(truths, predictions, average=f1_average)
-    mlflow.log_metric(f"{mode} F1", f1, epoch)
+    if compute_f1:
+        f1 = f1_score(truths, predictions, average=f1_average)
+        mlflow.log_metric(f"{mode} F1", f1, epoch)
+        results["f1"] = f1
 
-    return avg_loss, f1, predictions, truths
+    if compute_auc:
+        auc = roc_auc_score(truths,
+                            prob_scores,
+                            average=auc_average,
+                            multi_class="ovo")
+        mlflow.log_metric(f"{mode} AUC", f1, epoch)
+        results["auc"] = auc
+
+    results["loss"] = avg_loss
+    results["predictions"] = predictions
+    results["truths"] = truths
+    return results
 
 
 def edge_classification_step(mode: str,
@@ -252,13 +263,17 @@ def edge_classification_step(mode: str,
                              multilabel=False,
                              threshold=0,
                              reverse_mp=False,
+                             compute_f1=False,
+                             compute_auc=False,
                              f1_average="binary",
-                             use_node_metrics=False):
+                             auc_average="macro"):
 
     total_loss = 0
     total_num = 0
     predictions = []
     truths = []
+    if compute_auc:
+        prob_scores = []
     bar = tqdm(loader, total=len(loader), disable=not enable_tqdm)
     for batch in bar:
         if mode == "train":
@@ -307,10 +322,17 @@ def edge_classification_step(mode: str,
 
         if multilabel:
             preds = outputs > threshold
+            if compute_auc:
+                scores = torch.sigmoid(outputs)
         else:
             preds = outputs.argmax(dim=-1)
+            if compute_auc:
+                scores = torch.softmax(outputs, dim=-1)
+
         predictions.append(preds.detach().cpu().numpy())
         truths.append(targets.detach().cpu().numpy())
+        if compute_auc:
+            prob_scores.append(scores.detach().cpu().numpy())
 
         loss = loss.detach().cpu().item()
         num_targets = outputs.numel()
@@ -319,23 +341,32 @@ def edge_classification_step(mode: str,
         bar.set_description(f"{mode}_loss={loss:<8.6g}")
 
     # Metrics
+    results = {}
     predictions = np.concatenate(predictions)
     truths = np.concatenate(truths)
+    if compute_auc:
+        prob_scores = np.concatenate(prob_scores)
 
     avg_loss = total_loss / total_num
     mlflow.log_metric(f"{mode} loss", avg_loss, epoch)
 
-    # Note that 1 is the minority class
-    if use_node_metrics:
-        f1 = node_metrics_for_edge_readout(truths,
-                                           predictions,
-                                           average=f1_average)
-    else:
-        f1 = edge_metrics_for_edge_readout()
+    if compute_f1:
         f1 = f1_score(truths, predictions, average=f1_average)
-    mlflow.log_metric(f"{mode} F1", f1, epoch)
+        mlflow.log_metric(f"{mode} F1", f1, epoch)
+        results["f1"] = f1
 
-    return avg_loss, f1, predictions, truths
+    if compute_auc:
+        auc = roc_auc_score(truths,
+                            prob_scores,
+                            average=auc_average,
+                            multi_class="ovo")
+        mlflow.log_metric(f"{mode} AUC", f1, epoch)
+        results["auc"] = auc
+
+    results["loss"] = avg_loss
+    results["predictions"] = predictions
+    results["truths"] = truths
+    return results
 
 
 def get_run_step(task_type, run_step_kwargs):

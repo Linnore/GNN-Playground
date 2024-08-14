@@ -1,4 +1,3 @@
-criterion: loss
 device: cpu
 framework: transductive
 framework_options:

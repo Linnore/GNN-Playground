@@ -1,8 +1,12 @@
 CE_weight: None
 batch_size: 512
-f1_average: micro
 lr: 0.005
 num_epochs: 1000
+criterion: loss
+compute_f1: true
+f1_average: micro
+compute_auc: false
+auc_average: macro
 patience: 100
 weight_decay: 0.0005
 weighted_BCE: false

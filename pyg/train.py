@@ -50,7 +50,6 @@ def train_gnn(config):
     model.reset_parameters()
 
     # Log hyperparameters
-    # training_config = config["training_config"]
     training_config.update(model_config)
     params_str = pprint.pformat(training_config)
     system_config_str = pprint.pformat(system_config)
@@ -91,8 +90,8 @@ def train_gnn(config):
                                  weight_decay=training_config["weight_decay"])
 
     # Setup metrics
-    criterion = system_config["criterion"].lower()
-    if criterion == "loss":
+    criterion = training_config["criterion"].lower()
+    if criterion in ["loss", "auc"]:
         best_value = -2147483647
     elif criterion == "f1":
         best_value = -1
@@ -103,6 +102,12 @@ def train_gnn(config):
         patience = training_config["num_epochs"]
 
     # Setup training steps according to task type
+    compute_f1 = training_config["compute_f1"]
+    compute_auc = training_config["compute_auc"]
+    if criterion == "f1":
+        compute_f1 = True
+    if criterion == "auc":
+        compute_auc = True
     run_step_kwargs = dict(
         model=model,
         loss_fn=loss_fn,
@@ -111,7 +116,11 @@ def train_gnn(config):
         enable_tqdm=system_config["tqdm"],
         device=device,
         reverse_mp=reverse_mp,
-        f1_average=training_config["f1_average"])
+        compute_f1=compute_f1,
+        f1_average=training_config["f1_average"],
+        compute_auc=compute_auc,
+        auc_average=training_config["auc_average"],
+    )
     run_step, run_step_kwargs = get_run_step(dataset_config["task_type"],
                                              run_step_kwargs)
 
@@ -122,36 +131,47 @@ def train_gnn(config):
 
         # Training
         model.train()
-        train_loss, train_f1, _, _ = run_step("train", epoch, train_loader,
-                                              **run_step_kwargs)
+        train_result = run_step("train", epoch, train_loader,
+                                **run_step_kwargs)
 
         with torch.no_grad():
             # Validation
             model.eval()
-            val_loss, val_f1, _, _ = run_step("val", epoch, val_loader,
-                                              **run_step_kwargs)
+            val_result = run_step("val", epoch, val_loader, **run_step_kwargs)
 
             # Test
-            _, test_f1, predictions, truths = run_step("test", epoch,
-                                                       test_loader,
-                                                       **run_step_kwargs)
-
-        logger.info(f"Epoch {epoch}: train_loss={train_loss:<8.6g}, "
-                    f"train_f1={train_f1:<8.6g}, val_loss={val_loss:<8.6g}, "
-                    f"val_f1={val_f1:<8.6g}, test_f1={test_f1:<8.6g}")
+            test_result = run_step("test", epoch, test_loader,
+                                   **run_step_kwargs)
+        msg = f"Epoch {epoch}:"
+        train_msg = [f"train_loss={train_result['loss']:<8.6g}"]
+        val_msg = [f"val_loss={val_result['loss']:<8.6g}"]
+        test_msg = [f"test_loss={test_result['loss']:<8.6g}"]
+        if compute_f1:
+            train_msg.append(f"train_f1={train_result['f1']:<8.6g}")
+            val_msg.append(f"val_f1={val_result['f1']:<8.6g}")
+            test_msg.append(f"test_f1={val_result['f1']:<8.6g}")
+        if compute_auc:
+            train_msg.append(f"train_auc={train_result['auc']:<8.6g}")
+            val_msg.append(f"val_auc={val_result['auc']:<8.6g}")
+            test_msg.append(f"test_auc={val_result['auc']:<8.6g}")
+        msg = msg + ", ".join(train_msg + val_msg + test_msg)
+        logger.info(msg)
 
         # Best model
         if criterion == "loss":
-            criterion_value = -val_loss
-        elif criterion == "f1":
-            criterion_value = val_f1
+            criterion_value = -val_result[criterion]
+        elif criterion in ["f1", "auc"]:
+            criterion_value = val_result[criterion]
 
         if criterion_value > best_value:
             best_value = criterion_value
-            mlflow.log_metric("Best Test F1", test_f1, epoch)
+            if compute_f1:
+                mlflow.log_metric("Best Test F1", test_result['f1'], epoch)
+            if compute_auc:
+                mlflow.log_metric("Best Test AUC", test_result['auc'], epoch)
             best_model_state_dict = copy.deepcopy(model.state_dict())
-            best_report = classification_report(truths,
-                                                predictions,
+            best_report = classification_report(test_result['truths'],
+                                                test_result['predictions'],
                                                 zero_division=0)
             best_epoch = epoch
             torch.save(
