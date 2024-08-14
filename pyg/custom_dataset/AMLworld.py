@@ -298,10 +298,7 @@ class AMLworld(InMemoryDataset):
                 self._data.test_mask = torch.ones(self._data.num_nodes,
                                                   dtype=torch.bool)
         elif readout == "dynamic_node_label":
-            # Expect the data object will have `data.node_time_label``
-            # as a tensor of shape (num_rows, 3) where each row is
-            # (node,timestamp, label)
-            # self.infer_ilicit_x(self._data, self.infer_ilicit_x_kwargs)
+
             del self._data.x_label
             del self._data.y
 
@@ -524,9 +521,6 @@ class AMLworld(InMemoryDataset):
 
         if self.readout == "dynamic_node_label":
             # Data splitting
-
-            # split_timestamps = np.cumsum(np.array(
-            #     [0.2, 0.3, 0.5])) * timestamps.max().numpy()
             split_timestamps = np.array([
                 timestamps[int(0.6 * len(timestamps)) - 1],
                 timestamps[int(0.8 * len(timestamps)) - 1], timestamps[-1]
@@ -791,14 +785,9 @@ class AMLworld(InMemoryDataset):
             num_investigation = (int(torch.max(data.timestamps).item()) -
                                  infer_timewindow * 86400) // (infer_period *
                                                                86400)
-        # self.logger.debug(num_investigation)
         for i in range(num_investigation):
             max_time = (i * infer_period + infer_timewindow) * 86400 + min_ts
             min_time = (i * infer_period) * 86400 + min_ts
-
-            # self.logger.debug(torch.where((data.timestamps < max_time)))
-            # self.logger.debug(torch.where((data.timestamps < max_time) & (
-            #     data.timestamps >= min_time), True, False))
 
             mask = torch.where(
                 (data.timestamps < max_time) & (data.timestamps >= min_time),
@@ -829,11 +818,6 @@ class AMLworld(InMemoryDataset):
 
                 tmp_timestamps_src = torch.Tensor(tmp_timestamps_src)
 
-                # tmp_timestamps_src = torch.Tensor(
-                #     list(map(
-                #         lambda x: infer_data_timestamp[np.where(
-                #             infer_data_node == x)[-1]], infer_data_node)))
-
             if dest_dup:
 
                 infer_data_node_dst = data.edge_index[1, mask].flatten()
@@ -851,12 +835,6 @@ class AMLworld(InMemoryDataset):
 
                     tmp_timestamps_dst = torch.Tensor(tmp_timestamps_dst)
 
-                    # tmp_timestamps_dst = torch.Tensor(
-                    #     list(map(
-                    #         lambda x: infer_data_timestamp[np.where(
-                    #             infer_data_node_dst == x)[-1]],
-                    #         infer_data_node_dst)))
-
                 infer_data_timestamp = torch.Tensor(
                     np.ravel([tmp_timestamps_src, tmp_timestamps_dst], 'F'))
                 infer_data_y = torch.Tensor(
@@ -870,12 +848,7 @@ class AMLworld(InMemoryDataset):
                 torch.vstack(
                     (infer_data_timestamp, infer_data_node, infer_data_y)))
 
-            # self.logger.debug(
-            #     torch.vstack((infer_data_timestamp, infer_data_node,
-            #                   infer_data_y)).shape)
-
         data.node_time_label = torch.cat(tuple(data.node_time_label), dim=1).T
-        # self.logger.debug(data.node_time_label.shape)
 
         if not in_place:
             return data
