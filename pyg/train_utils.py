@@ -186,7 +186,8 @@ def node_classification_step(mode: str,
                              compute_f1=False,
                              compute_auc=False,
                              f1_average="micro",
-                             auc_average="macro"):
+                             auc_average="macro",
+                             **kwargs):
     total_loss = 0
     total_num = 0
     predictions = []
