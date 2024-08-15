@@ -25,12 +25,12 @@ def get_batch_input(batch, reverse_mp, device):
     return input_dict
 
 
-def append_source_edges(batch, mask_not_in_batch, data):
+def append_source_edges(batch, mask_not_in_batch, data, temporal, time_attr):
     batch.edge_index = torch.hstack(
         (batch.edge_index, batch.edge_label_index[:, mask_not_in_batch]))
     batch.y = torch.hstack((batch.y, batch.edge_label[mask_not_in_batch]))
 
-    # Retrieve edge attributes from the hole data object
+    # Retrieve edge attributes from the whole data object
     missing_e_id = batch.src_e_id[mask_not_in_batch]
     if hasattr(batch, 'edge_attr') and batch.edge_attr is not None:
         batch.edge_attr = torch.vstack(
@@ -38,10 +38,14 @@ def append_source_edges(batch, mask_not_in_batch, data):
         if hasattr(batch, "rev_edge_attr"):
             batch.rev_edge_attr = torch.vstack(
                 (batch.rev_edge_attr, data.rev_edge_attr[missing_e_id]))
+    # Retrieve edge timestamps from the whole data object
+    if temporal:
+        batch[time_attr] = torch.hstack(
+            (batch[time_attr], data[time_attr][missing_e_id]))
     batch.num_appended = missing_e_id.shape[0]
 
 
-def append_source_nodes_by_self_loops(batch):
+def append_source_nodes_by_self_loops(batch, temporal, time_attr):
     batch.edge_index = torch.hstack((batch.edge_index, batch.edge_label_index))
     batch.y = torch.hstack((batch.y, batch.edge_label))
     batch.num_appended = batch.edge_label_index.shape[1]
@@ -53,6 +57,20 @@ def append_source_nodes_by_self_loops(batch):
             batch.rev_edge_attr = torch.vstack(
                 (batch.rev_edge_attr,
                  torch.zeros((batch.num_appended, batch.edge_attr.shape[1]))))
+    if temporal:
+        batch[time_attr] = torch.hstack(
+            (batch[time_attr], batch.edge_label_time))
+
+
+def sort_batch_by_time(batch, mask, time_attr):
+    idx = torch.argsort(batch[time_attr])
+    batch[time_attr] = batch[time_attr][idx]
+    for edge_attr in batch.edge_attrs():
+        if edge_attr == "edge_index":
+            batch[edge_attr] = batch[edge_attr][:, idx]
+        else:
+            batch[edge_attr] = batch[edge_attr][idx]
+    mask = mask[idx]
 
 
 def get_io_schema(sample_input: dict, dataset_config: dict):
@@ -183,7 +201,7 @@ def node_classification_step(mode: str,
         if sampling_strategy == "SAGE":
             mask = torch.arange(batch.batch_size)
         elif sampling_strategy in [None, "None"]:
-            mask = eval(f"batch.{mode}_mask")
+            mask = batch[f"{mode}_mask"]
         elif sampling_strategy == "GraphBatching":
             mask = None
 
@@ -258,6 +276,8 @@ def edge_classification_step(mode: str,
                              enable_tqdm,
                              sampling_strategy,
                              device="cpu",
+                             temporal_sampling=False,
+                             time_attr="time",
                              multilabel=False,
                              threshold=0,
                              reverse_mp=False,
@@ -281,10 +301,14 @@ def edge_classification_step(mode: str,
             if hasattr(
                     loader.data,
                     "readout") and loader.data.readout == "dynamic_node_label":
-                mask = torch.arange(
-                    batch.edge_index.shape[1], batch.edge_index.shape[1] +
-                    batch.edge_label_index.shape[1])
-                append_source_nodes_by_self_loops(batch)
+                mask = torch.hstack((torch.zeros(batch.num_edges,
+                                                 dtype=torch.bool),
+                                     torch.ones(batch.edge_label.shape[0],
+                                                dtype=torch.bool)))
+                append_source_nodes_by_self_loops(batch, temporal_sampling,
+                                                  time_attr)
+                if temporal_sampling:
+                    sort_batch_by_time(batch, mask, time_attr)
 
             else:
                 # Get edges in batch that are source edges
@@ -296,12 +320,15 @@ def edge_classification_step(mode: str,
                 mask_not_in_batch = ~torch.isin(batch.src_e_id, in_batch_e_id)
 
                 # Append source edges that are not in batch to the batch
-                append_source_edges(batch, mask_not_in_batch, loader.data)
+                append_source_edges(batch, mask_not_in_batch, loader.data,
+                                    temporal_sampling, time_attr)
                 mask = torch.hstack(
                     (mask, torch.ones(batch.num_appended, dtype=torch.bool)))
+                if temporal_sampling:
+                    sort_batch_by_time(batch, mask, time_attr)
 
         elif sampling_strategy in [None, "None"]:
-            mask = eval(f"batch.{mode}_mask")
+            mask = batch[f"{mode}_mask"]
         elif sampling_strategy == "GraphBatching":
             mask = None
 

@@ -5,7 +5,7 @@ add_time_stamp: true
 force_reload: false
 ibm_split: true
 infer_ilicit_x_kwargs:
-  dest_dup: false
+  dest_dup: True
   infer_period: 7
   infer_ratio: 1
   infer_timewindow: 7

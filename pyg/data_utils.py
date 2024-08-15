@@ -104,7 +104,7 @@ def get_data_SAGE(config):
         if readout == "edge":
             for i, split in enumerate(["train", "val", "test"]):
                 data = dataset[i]
-                data.num_input_edges = eval(f"data.{split}_mask.sum()")
+                data.num_input_edges = data[f"{split}_mask"].sum()
                 data.input_id_to_e_id = torch.arange(
                     data.num_input_edges
                 ) + data.num_edges - data.num_input_edges
@@ -285,12 +285,9 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
     if temporal:
         temporal_strategy = sampling_config.get("temporal_strategy", "last")
         time_attr = sampling_config.get("time_attr", "time")
-        train_time = eval(f"train_data.{time_attr}")
-        train_time = train_time[train_mask]
-        val_time = eval(f"val_data.{time_attr}")
-        val_time = val_time[val_mask]
-        test_time = eval(f"test_data.{time_attr}")
-        test_time = test_time[test_mask]
+        train_time = train_data[time_attr][train_mask]
+        val_time = val_data[time_attr][val_mask]
+        test_time = test_data[time_attr][test_mask]
     else:
         temporal_strategy = "last"
         time_attr = None

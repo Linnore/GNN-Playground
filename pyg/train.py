@@ -113,6 +113,8 @@ def train_gnn(config):
         loss_fn=loss_fn,
         optimizer=optimizer,
         sampling_strategy=sampling_config["sampling_strategy"],
+        temporal_sampling=sampling_config["temporal_sampling"],
+        time_attr=sampling_config["time_attr"],
         enable_tqdm=system_config["tqdm"],
         device=device,
         reverse_mp=reverse_mp,

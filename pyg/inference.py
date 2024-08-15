@@ -30,7 +30,7 @@ def node_classification_inference(model,
             mask = torch.arange(batch.batch_size)
             batch_n_ids = batch.n_id[mask]
         elif sampling_strategy in [None, "None"]:
-            mask = eval(f"batch.{split}_mask")
+            mask = batch[f"{split}_mask"]
             batch_n_ids = torch.arange(batch.num_nodes)[mask]
         elif sampling_strategy == "GraphBatching":
             mask = torch.ones(batch.x.shape[0], dtype=bool)

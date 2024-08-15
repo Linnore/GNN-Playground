@@ -98,7 +98,7 @@ def eval_node_classification(split,
         if sampling_strategy == "SAGE":
             mask = torch.arange(batch.batch_size)
         elif sampling_strategy in [None, "None"]:
-            mask = eval(f"batch.{split}_mask")
+            mask = batch[f"{split}_mask"]
         elif sampling_strategy == "GraphBatching":
             mask = None
 
@@ -152,7 +152,7 @@ def eval_edge_classification(split,
                 (mask, torch.ones(batch.num_appended, dtype=torch.bool)))
 
         elif sampling_strategy in [None, "None"]:
-            mask = eval(f"batch.{split}_mask")
+            mask = batch[f"{split}_mask"]
 
         targets = batch.y.to(device)
         outputs = model(**get_batch_input(batch, reverse_mp, device))

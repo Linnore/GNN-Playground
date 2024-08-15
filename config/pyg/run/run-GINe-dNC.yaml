@@ -50,7 +50,7 @@ model_config:
   dropout: 0.1
   batch_norm: true
   edge_update: true
-  layer_mix: None
+  layer_mix: Cat
   model_mix: Mean
   reverse_mp: true
   skip_connection: true

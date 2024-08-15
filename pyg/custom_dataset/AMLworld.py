@@ -772,7 +772,7 @@ class AMLworld(InMemoryDataset):
                        infer_period: int = 7,
                        infer_ratio: float = 1.0,
                        use_investigation_time: bool = False,
-                       dest_dup: bool = False,
+                       dest_dup: bool = True,
                        in_place=True):
 
         if in_place:
@@ -845,9 +845,11 @@ class AMLworld(InMemoryDataset):
             else:
                 infer_data_timestamp = tmp_timestamps_src
 
-            data.node_time_label.append(
-                torch.vstack(
-                    (infer_data_timestamp, infer_data_node, infer_data_y)))
+            idx = torch.argsort(infer_data_timestamp)
+            ntl = torch.vstack(
+                (infer_data_node[idx], infer_data_timestamp[idx], infer_data_y[idx]))
+
+            data.node_time_label.append(ntl)
 
         data.node_time_label = torch.cat(tuple(data.node_time_label), dim=1).T
 
