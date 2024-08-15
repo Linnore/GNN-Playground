@@ -846,8 +846,8 @@ class AMLworld(InMemoryDataset):
                 infer_data_timestamp = tmp_timestamps_src
 
             idx = torch.argsort(infer_data_timestamp)
-            ntl = torch.vstack(
-                (infer_data_node[idx], infer_data_timestamp[idx], infer_data_y[idx]))
+            ntl = torch.vstack((infer_data_node[idx],
+                                infer_data_timestamp[idx], infer_data_y[idx]))
 
             data.node_time_label.append(ntl)
 
