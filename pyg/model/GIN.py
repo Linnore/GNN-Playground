@@ -467,7 +467,8 @@ class GINe(torch.nn.Module):
                                             layer_mix=layer_mix,
                                             *args,
                                             **kwargs)
-            self.cat_mlp = MLP([4, 4, 2])
+            if model_mix == "Cat_MLP":
+                self.cat_mlp = MLP([4, 4, 2])
 
         else:
             if not self.reverse_mp:
