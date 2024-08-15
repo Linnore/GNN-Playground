@@ -367,7 +367,7 @@ class GINe_layer_mix(GIN_Custom):
                 emlp_out = self.emlps[i](torch.cat([x[src], x[dst], edge_attr],
                                                    -1))
                 if self.skip_connection:
-                    edge_attr = (emlp_out + residual) / 2
+                    edge_attr = emlp_out + residual
                 else:
                     edge_attr = emlp_out
 
@@ -398,7 +398,7 @@ class GINe_layer_mix(GIN_Custom):
             conv_out = self.batch_norms[i](
                 conv_out) if self.batch_norm else conv_out
             conv_out = F.relu(conv_out)
-            x = (conv_out + residual) / 2 if self.skip_connection else conv_out
+            x = conv_out + residual if self.skip_connection else conv_out
 
             if self.jk_mode is not None:
                 xs.append(x)

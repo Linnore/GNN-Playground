@@ -7,7 +7,7 @@ from typing import Literal
 from torch.nn import Linear, Identity, ModuleList, Sequential, ReLU, Dropout
 
 from torch_geometric.nn.models import PNA as PNA_Base
-from torch_geometric.nn.models import JumpingKnowledge
+from torch_geometric.nn.models import JumpingKnowledge, MLP
 from torch_geometric.nn import PNAConv, BatchNorm
 
 
@@ -197,6 +197,7 @@ class PNAe_layer_mix(PNA_Custom):
     # Adjusted model architecture from
     # https://github.com/IBM/Multi-GNN/blob/252b0252afca109d1d216c411c59ff70753b25fc/models.py#L7
     def __init__(self,
+                 hidden_channels: int,
                  edge_update: bool = False,
                  edge_dim=None,
                  batch_norm=True,
@@ -210,6 +211,12 @@ class PNAe_layer_mix(PNA_Custom):
         self.layer_mix = layer_mix
         self.readout = kwargs.get('readout', None)
 
+        if self.layer_mix.lower() == "cat":
+            assert hidden_channels % 2 == 0
+            self.conv_out_channels = hidden_channels // 2
+        else:
+            self.conv_out_channels = hidden_channels
+
         super().__init__(
             *args,
             **kwargs,
@@ -222,6 +229,7 @@ class PNAe_layer_mix(PNA_Custom):
         self.convs = ModuleList()
         self.emlps = ModuleList()
         self.batch_norms = ModuleList()
+
         for _ in range(self.num_layers):
             conv = self.Conv(in_channels=self.hidden_channels,
                              out_channels=self.hidden_channels,
@@ -362,11 +370,12 @@ class PNAe_layer_mix(PNA_Custom):
 
             # Mix
             mix_out = self.get_mixture(fx, rx)
-            # mix_out = (fx + rx) / 2 # TODO: Try different mixture method
 
-            x = mix_out + residual if self.skip_connection else mix_out
-            x = self.batch_norms[i](x) if self.batch_norm else x
-            x = F.relu(x)
+            mix_out = self.batch_norms[i](
+                mix_out) if self.batch_norm else mix_out
+            mix_out = F.relu(mix_out)
+            x = (mix_out + residual) / 2 if self.skip_connection else mix_out
+
             if self.jk_mode is not None:
                 xs.append(x)
 
@@ -404,11 +413,10 @@ class PNAe_layer_mix(PNA_Custom):
             if self.skip_connection:
                 residual = self.skip_proj[i](x)
             conv_out = self.convs[i](x, edge_index, edge_attr)
+            conv_out = self.batch_norms[i](
+                conv_out) if self.batch_norm else conv_out
+            conv_out = F.relu(conv_out)
             x = conv_out + residual if self.skip_connection else conv_out
-            x = self.batch_norms[i](x) if self.batch_norm else x
-
-            if i != self.num_layers - 1:
-                x = F.relu(x)
 
             if self.jk_mode is not None:
                 xs.append(x)
@@ -449,7 +457,8 @@ class PNAe(torch.nn.Module):
                  batch_norm=True,
                  layer_mix: Literal["None", "Mean", "Sum", "Max",
                                     "Cat"] = "Mean",
-                 model_mix: Literal["Mean", "Sum", "Max"] = "Mean",
+                 model_mix: Literal["Mean", "Sum", "Max",
+                                    "Cat_MLP"] = "Cat_MLP",
                  *args,
                  **kwargs):
 
@@ -459,6 +468,7 @@ class PNAe(torch.nn.Module):
         self.layer_mix = layer_mix
         self.model_mix = model_mix
         self.config = kwargs.get("config", {})
+        self.cat_mlp = None
 
         if self.reverse_mp and self.layer_mix.lower() == "none":
             kwargs["reverse_mp"] = False
@@ -475,8 +485,11 @@ class PNAe(torch.nn.Module):
                                             layer_mix=layer_mix,
                                             *args,
                                             **kwargs)
+            self.cat_mlp = MLP([4, 4, 2])
 
         else:
+            if not self.reverse_mp:
+                self.layer_mix = "None"
             self.model = PNAe_layer_mix(edge_update=edge_update,
                                         edge_dim=edge_dim,
                                         batch_norm=batch_norm,
@@ -500,6 +513,8 @@ class PNAe(torch.nn.Module):
         if self.reverse_mp and self.layer_mix.lower() == "none":
             self.org_model.reset_parameters()
             self.rev_model.reset_parameters()
+            if self.cat_mlp is not None:
+                self.cat_mlp.reset_parameters()
         else:
             self.model.reset_parameters()
 
@@ -511,5 +526,8 @@ class PNAe(torch.nn.Module):
                 return org_out + rev_out
             case "max":
                 return torch.max(org_out, rev_out)
+            case "cat_mlp":
+                out = torch.cat((org_out, rev_out), dim=1)
+                return self.cat_mlp(out)
             case _:
                 raise NotImplementedError
