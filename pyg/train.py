@@ -133,8 +133,8 @@ def train_gnn(config):
 
         # Training
         model.train()
-        # train_result = run_step("train", epoch, train_loader,
-        #                         **run_step_kwargs)
+        train_result = run_step("train", epoch, train_loader,
+                                **run_step_kwargs)
 
         with torch.no_grad():
             # Validation
@@ -151,11 +151,11 @@ def train_gnn(config):
         if compute_f1:
             train_msg.append(f"train_f1={train_result['f1']:<8.6g}")
             val_msg.append(f"val_f1={val_result['f1']:<8.6g}")
-            test_msg.append(f"test_f1={val_result['f1']:<8.6g}")
+            test_msg.append(f"test_f1={test_result['f1']:<8.6g}")
         if compute_auc:
             train_msg.append(f"train_auc={train_result['auc']:<8.6g}")
             val_msg.append(f"val_auc={val_result['auc']:<8.6g}")
-            test_msg.append(f"test_auc={val_result['auc']:<8.6g}")
+            test_msg.append(f"test_auc={test_result['auc']:<8.6g}")
         msg = msg + ", ".join(train_msg + val_msg + test_msg)
         logger.info(msg)
 
