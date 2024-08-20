@@ -133,8 +133,8 @@ def train_gnn(config):
 
         # Training
         model.train()
-        train_result = run_step("train", epoch, train_loader,
-                                **run_step_kwargs)
+        # train_result = run_step("train", epoch, train_loader,
+        #                         **run_step_kwargs)
 
         with torch.no_grad():
             # Validation

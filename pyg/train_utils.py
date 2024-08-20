@@ -62,17 +62,6 @@ def append_source_nodes_by_self_loops(batch, temporal, time_attr):
             (batch[time_attr], batch.edge_label_time))
 
 
-def sort_batch_by_time(batch, mask, time_attr):
-    idx = torch.argsort(batch[time_attr])
-    batch[time_attr] = batch[time_attr][idx]
-    for edge_attr in batch.edge_attrs():
-        if edge_attr == "edge_index":
-            batch[edge_attr] = batch[edge_attr][:, idx]
-        else:
-            batch[edge_attr] = batch[edge_attr][idx]
-    mask = mask[idx]
-
-
 def get_io_schema(sample_input: dict, dataset_config: dict):
     input_list = [
         TensorSpec(np.dtype(np.float32),
@@ -308,8 +297,6 @@ def edge_classification_step(mode: str,
                                                 dtype=torch.bool)))
                 append_source_nodes_by_self_loops(batch, temporal_sampling,
                                                   time_attr)
-                if temporal_sampling:
-                    sort_batch_by_time(batch, mask, time_attr)
 
             else:
                 # Get edges in batch that are source edges
@@ -325,8 +312,6 @@ def edge_classification_step(mode: str,
                                     temporal_sampling, time_attr)
                 mask = torch.hstack(
                     (mask, torch.ones(batch.num_appended, dtype=torch.bool)))
-                if temporal_sampling:
-                    sort_batch_by_time(batch, mask, time_attr)
 
         elif sampling_strategy in [None, "None"]:
             mask = batch[f"{mode}_mask"]
