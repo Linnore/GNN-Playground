@@ -373,7 +373,7 @@ class PNAe_layer_mix(PNA_Custom):
         xs = [x]
         for i in range(self.num_layers):
             if self.skip_connection:
-                residual = Identity(x)
+                residual = self.skip_proj[i](x.clone())
             # non-reverse
             fx = self.convs[i](x, edge_index, edge_attr)
 
