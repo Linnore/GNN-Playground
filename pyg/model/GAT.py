@@ -3,10 +3,11 @@ import torch.nn.functional as F
 
 from loguru import logger  # noqa
 
-from torch.nn import Linear, Identity, ModuleList, Sequential, ReLU, Dropout
+from torch.nn import Linear, Identity, ModuleList, Sequential, ReLU
+from typing import Literal
 
 from torch_geometric.nn.models import GAT as GAT_Base
-from torch_geometric.nn.models import JumpingKnowledge
+from torch_geometric.nn.models import JumpingKnowledge, MLP
 from torch_geometric.nn import GATConv, GATv2Conv, BatchNorm
 
 
@@ -30,6 +31,7 @@ class GAT_Custom(torch.nn.Module):
                  dropout: float = 0.6,
                  jk=None,
                  skip_connection: bool = False,
+                 reverse_mp: bool = False,
                  config={},
                  *args,
                  **kwargs):
@@ -46,60 +48,96 @@ class GAT_Custom(torch.nn.Module):
         self.out_channels = out_channels
         self.num_layers = num_layers
         self.dropout = dropout
+        self.jk = jk
+        self.skip_connection = skip_connection
+        self.heads = heads
+        self.output_heads = output_heads
 
-        if isinstance(hidden_channels_per_head, int):
-            hidden_channels_per_head = [hidden_channels_per_head
-                                        ] * (num_layers - 1)
+        self.init_layers()
 
-        if isinstance(heads, int):
-            heads = [heads] * (num_layers - 1)
+        self.reverse_mp = reverse_mp
+        if self.reverse_mp:
+            self.init_layers_reverse_mp()
+
+    def init_layers(self):
+        if isinstance(self.hidden_channels_per_head, int):
+            self.hidden_channels_per_head = [self.hidden_channels_per_head
+                                             ] * (self.num_layers - 1)
+
+        if isinstance(self.heads, int):
+            self.heads = [self.heads] * (self.num_layers - 1)
 
         self.convs = ModuleList()
         self.convs.append(
-            self.Conv(in_channels,
-                      hidden_channels_per_head[0],
-                      heads[0],
-                      dropout=dropout))
-        for i in range(1, num_layers - 1):
+            self.Conv(self.in_channels,
+                      self.hidden_channels_per_head[0],
+                      self.heads[0],
+                      dropout=self.dropout))
+        for i in range(1, self.num_layers - 1):
             self.convs.append(
-                self.Conv(hidden_channels_per_head[i - 1] * heads[i - 1],
-                          hidden_channels_per_head[i],
-                          heads[i],
-                          dropout=dropout))
+                self.Conv(self.hidden_channels_per_head[i - 1] *
+                          self.heads[i - 1],
+                          self.hidden_channels_per_head[i],
+                          self.heads[i],
+                          dropout=self.dropout))
         self.convs.append(
-            self.Conv(hidden_channels_per_head[-1] * heads[-1],
-                      out_channels,
-                      output_heads,
+            self.Conv(self.hidden_channels_per_head[-1] * self.heads[-1],
+                      self.out_channels,
+                      self.output_heads,
                       concat=False,
-                      dropout=dropout))
+                      dropout=self.dropout))
 
-        self.jk_mode = jk
+        self.jk_mode = self.jk
         if self.jk_mode not in ["cat", None]:
             raise NotImplementedError(
                 NotImplementedError(
                     "JK mode not implemented. Only support concat JK for now!")
             )
         if self.jk_mode is not None:
-            self.jk = JumpingKnowledge(jk)
-            jk_in_channels = out_channels
-            for i in range(len(heads)):
-                jk_in_channels += heads[i] * hidden_channels_per_head[i]
-            self.jk_linear = Linear(jk_in_channels, out_channels)
+            self.jk = JumpingKnowledge(self.jk)
+            jk_in_channels = self.out_channels
+            for i in range(len(self.heads)):
+                jk_in_channels += self.heads[
+                    i] * self.hidden_channels_per_head[i]
+            self.jk_linear = Linear(jk_in_channels, self.out_channels)
 
-        self.skip_connection = skip_connection
+        self.skip_connection = self.skip_connection
         if self.skip_connection:
             self.skip_proj = ModuleList()
             self.skip_proj.append(
-                self.get_skip_proj(in_channels,
-                                   hidden_channels_per_head[0] * heads[0]))
-            for i in range(1, num_layers - 1):
+                self.get_skip_proj(
+                    self.in_channels,
+                    self.hidden_channels_per_head[0] * self.heads[0]))
+            for i in range(1, self.num_layers - 1):
                 self.skip_proj.append(
                     self.get_skip_proj(
-                        hidden_channels_per_head[i - 1] * heads[i - 1],
-                        hidden_channels_per_head[i] * heads[i]))
+                        self.hidden_channels_per_head[i - 1] *
+                        self.heads[i - 1],
+                        self.hidden_channels_per_head[i] * self.heads[i]))
             self.skip_proj.append(
-                self.get_skip_proj(hidden_channels_per_head[-1] * heads[-1],
-                                   out_channels))
+                self.get_skip_proj(
+                    self.hidden_channels_per_head[-1] * self.heads[-1],
+                    self.out_channels))
+
+    def init_layers_reverse_mp(self):
+        self.rev_convs = ModuleList()
+        self.rev_convs.append(
+            self.Conv(self.in_channels,
+                      self.hidden_channels_per_head[0],
+                      self.head[0],
+                      dropout=self.dropout))
+        for i in range(1, self.num_layers - 1):
+            self.rev_convs.append(
+                self.Conv(
+                    self.init_MLP_for_GIN(self.hidden_channels[i - 1],
+                                          self.hidden_channels[i],
+                                          self.num_MLP_layers)))
+        self.rev_convs.append(
+            self.Conv(self.hidden_channels_per_head[-1] * self.heads[-1],
+                      self.out_channels,
+                      self.output_heads,
+                      concat=False,
+                      dropout=self.dropout))
 
     def get_skip_proj(self, in_channels, out_channels):
         if in_channels == out_channels:
@@ -133,7 +171,7 @@ class GAT_Custom(torch.nn.Module):
         for i in range(self.num_layers):
             x = F.dropout(x, p=self.dropout, training=self.training)
             if self.skip_connection:
-                residual = self.skip_proj[i](x)
+                residual = self.skip_proj[i](x.clone())
             conv_out = self.convs[i](x, edge_index)
             x = conv_out + residual if self.skip_connection else conv_out
 
@@ -149,51 +187,59 @@ class GAT_Custom(torch.nn.Module):
         return x
 
 
-class GATe(GAT_Custom):
+class GATe_layer_mix(GAT_Custom):
     # Adjusted model architecture from
     # https://github.com/IBM/Multi-GNN/blob/252b0252afca109d1d216c411c59ff70753b25fc/models.py#L7
     def __init__(self,
-                 in_channels: int,
                  hidden_channels_per_head: int,
-                 out_channels: int,
                  heads: int,
                  edge_update: bool = False,
                  edge_dim=None,
                  batch_norm=True,
+                 layer_mix: Literal[None, "None", "Mean", "Sum", "Max",
+                                    "Cat"] = "Mean",
+                 readout: Literal["node", "edge", "node_embed"] = "edge",
                  *args,
                  **kwargs):
 
+        self.batch_norm = batch_norm
+        self.edge_update = edge_update
+        self.edge_dim = edge_dim
+        self.layer_mix = layer_mix
+        self.readout = readout
+        self.hidden_channels_per_head = hidden_channels_per_head
+        self.heads = heads
         self.hidden_channels = hidden_channels_per_head * heads
 
+        if self.layer_mix.lower() == "cat":
+            assert hidden_channels_per_head % 2 == 0
+            self.conv_out_channels = hidden_channels_per_head // 2
+        else:
+            self.conv_out_channels = hidden_channels_per_head
+
         super().__init__(
-            in_channels=self.hidden_channels,
+            *args,
             hidden_channels_per_head=hidden_channels_per_head,
             heads=heads,
-            out_channels=self.hidden_channels,
-            *args,
             **kwargs,
         )
 
-        self.batch_norm = batch_norm
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.edge_update = edge_update
-        self.readout = kwargs.get('readout', None)
-
+    def init_layers(self):
         self.node_emb = Linear(self.in_channels, self.hidden_channels)
-        self.edge_emb = Linear(edge_dim, self.hidden_channels)
+        self.edge_emb = Linear(self.edge_dim, self.hidden_channels)
 
         self.convs = ModuleList()
         self.emlps = ModuleList()
         self.batch_norms = ModuleList()
+
         for _ in range(self.num_layers):
-            conv = self.Conv(in_channels=self.hidden_channels,
-                             out_channels=self.hidden_channels,
-                             heads=heads,
+            conv = self.Conv(self.hidden_channels,
+                             self.conv_out_channels,
+                             self.heads,
                              concat=True,
                              dropout=self.dropout,
-                             add_self_loops=True,
-                             edge_dim=self.hidden_channels)
+                             edge_dim=self.hidden_channels,
+                             add_self_loops=False)
             if self.edge_update:
                 self.emlps.append(
                     Sequential(
@@ -206,13 +252,56 @@ class GATe(GAT_Custom):
 
         if self.readout == "edge":
             readout_in_channels = self.hidden_channels * 3
-        elif self.readout == "node":
+            self.decoder = MLP(
+                channel_list=[readout_in_channels, 50, 25, self.out_channels],
+                dropout=[self.dropout, self.dropout, 0],
+                norm=None)
+        elif self.readout in ["node", "node_embed"]:
             readout_in_channels = self.hidden_channels
+            self.decoder = MLP(
+                channel_list=[readout_in_channels, 50, 25, self.out_channels],
+                dropout=[self.dropout, self.dropout, 0],
+                norm=None)
 
-        self.mlp = Sequential(Linear(readout_in_channels, 50), ReLU(),
-                              Dropout(self.dropout), Linear(50, 25), ReLU(),
-                              Dropout(self.dropout),
-                              Linear(25, self.out_channels))
+        self.jk_mode = self.jk
+        if self.jk_mode not in ["cat", None]:
+            raise NotImplementedError(
+                NotImplementedError(
+                    "JK mode not implemented. Only support concat JK for now!")
+            )
+        if self.jk_mode is not None:
+            self.jk = JumpingKnowledge(self.jk)
+            jk_in_channels = self.hidden_channels * (self.num_layers + 1)
+            self.jk_linear = Linear(jk_in_channels, self.out_channels)
+
+        self.skip_connection = self.skip_connection
+        if self.skip_connection:
+            self.skip_proj = ModuleList()
+            for i in range(self.num_layers):
+                self.skip_proj.append(
+                    self.get_skip_proj(self.hidden_channels,
+                                       self.hidden_channels))
+
+    def init_layers_reverse_mp(self):
+        self.rev_edge_emb = Linear(self.edge_dim, self.hidden_channels)
+
+        self.rev_convs = ModuleList()
+        self.rev_emlps = ModuleList()
+        for _ in range(self.num_layers):
+            conv = self.Conv(self.hidden_channels,
+                             self.conv_out_channels,
+                             self.heads,
+                             concat=True,
+                             dropout=self.dropout,
+                             edge_dim=self.hidden_channels,
+                             add_self_loops=False)
+            if self.edge_update:
+                self.rev_emlps.append(
+                    Sequential(
+                        Linear(3 * self.hidden_channels, self.hidden_channels),
+                        ReLU(),
+                        Linear(self.hidden_channels, self.hidden_channels)))
+            self.rev_convs.append(conv)
 
     def reset_parameters(self):
         for conv in self.convs:
@@ -223,9 +312,8 @@ class GATe(GAT_Custom):
             for nn in self.skip_proj:
                 if isinstance(nn, Linear):
                     nn.reset_parameters()
-        for layer in self.mlp:
-            if isinstance(layer, Linear):
-                layer.reset_parameters()
+        if self.decoder:
+            self.decoder.reset_parameters()
         for layer in self.emlps:
             if isinstance(layer, Linear):
                 layer.reset_parameters()
@@ -234,27 +322,72 @@ class GATe(GAT_Custom):
         for layer in self.batch_norms:
             layer.reset_parameters()
 
-    def forward(self, x, edge_index, edge_attr):
+    def get_mixture(self, fx, rx):
+        match self.layer_mix.lower():
+            case "none":
+                raise NotImplementedError
+            case "mean":
+                return (fx + rx) / 2
+            case "sum":
+                return fx + rx
+            case "cat":
+                return torch.concatenate((fx, rx), dim=1)
+            case "max":
+                return torch.max(fx, rx)
+            case _:
+                raise NotImplementedError
+
+    def encode(self, *args, **kwargs):
+        assert self.readout == "node_embed"
+        return self.forward(*args, **kwargs)
+
+    def decode(self, embedding):
+        assert self.readout == "node_embed"
+        return self.decoder(embedding)
+
+    def forward(self, x, edge_index, edge_attr, **kwargs):
+        rev_edge_index = kwargs.pop("rev_edge_index", None)
+        rev_edge_attr = kwargs.pop("rev_edge_attr", None)
+        assert len(kwargs) == 0, "Unexpected arguments!"
+
+        if rev_edge_index is None:
+            return self.forward_default(x, edge_index, edge_attr)
+        else:
+            return self.forward_with_reverse_mp(x, edge_index, edge_attr,
+                                                rev_edge_index, rev_edge_attr)
+
+    def forward_with_reverse_mp(self, x, edge_index, edge_attr, rev_edge_index,
+                                rev_edge_attr):
         src, dst = edge_index
 
         x = self.node_emb(x)
         edge_attr = self.edge_emb(edge_attr)
+        rev_edge_attr = self.rev_edge_emb(rev_edge_attr)
 
-        xs = []
+        xs = [x]
         for i in range(self.num_layers):
-            # x = F.dropout(x, p=self.dropout, training=self.training)
             if self.skip_connection:
-                residual = self.skip_proj[i](x)
-            conv_out = self.convs[i](x, edge_index, edge_attr)
-            x = conv_out + residual if self.skip_connection else conv_out
-            x = self.batch_norms[i](x) if self.batch_norm else x
+                residual = self.skip_proj[i](x.clone())
+            # non-reverse
+            fx = self.convs[i](x, edge_index, edge_attr)
 
-            if i != self.num_layers - 1:
-                x = F.relu(x)
+            # reverse
+            rx = self.rev_convs[i](x, rev_edge_index, rev_edge_attr)
+
+            # Mix
+            mix_out = self.get_mixture(fx, rx)
+
+            mix_out = self.batch_norms[i](
+                mix_out) if self.batch_norm else mix_out
+            mix_out = F.relu(mix_out)
+            x = (mix_out + residual) / 2 if self.skip_connection else mix_out
+
+            if self.jk_mode is not None:
+                xs.append(x)
 
             if self.edge_update:
                 if self.skip_connection:
-                    residual = self.skip_proj[i](edge_attr)
+                    residual = self.skip_proj[i](edge_attr.clone())
                 emlp_out = self.emlps[i](torch.cat([x[src], x[dst], edge_attr],
                                                    -1))
                 if self.skip_connection:
@@ -268,13 +401,158 @@ class GATe(GAT_Custom):
         if self.readout == "edge":
             # Dont know whether the relu is useful or not
             out = torch.cat([x[src].relu(), x[dst].relu(), edge_attr], -1)
-            out = self.mlp(out)
+            out = self.decoder(out)
             return out
         elif self.readout == "node":
-            out = self.mlp(x)
+            out = self.decoder(x)
             return out
+        elif self.readout == "node_embed":
+            return x
+
+    def forward_default(self, x, edge_index, edge_attr):
+        src, dst = edge_index
+
+        x = self.node_emb(x)
+        edge_attr = self.edge_emb(edge_attr)
+
+        xs = [x]
+        for i in range(self.num_layers):
+            # x = F.dropout(x, p=self.dropout, training=self.training)
+            if self.skip_connection:
+                residual = self.skip_proj[i](x.clone())
+            conv_out = self.convs[i](x, edge_index, edge_attr)
+            conv_out = self.batch_norms[i](
+                conv_out) if self.batch_norm else conv_out
+            conv_out = F.relu(conv_out)
+            x = conv_out + residual if self.skip_connection else conv_out
+
+            if self.jk_mode is not None:
+                xs.append(x)
+
+            if self.edge_update:
+                if self.skip_connection:
+                    residual = self.skip_proj[i](edge_attr.clone())
+                emlp_out = self.emlps[i](torch.cat([x[src], x[dst], edge_attr],
+                                                   -1))
+                if self.skip_connection:
+                    edge_attr = (emlp_out + residual) / 2
+                else:
+                    edge_attr = emlp_out
+
+        if self.jk_mode is not None:
+            x = self.jk_linear(self.jk(xs))
+
+        if self.readout == "edge":
+            # Dont know whether the relu is useful or not
+            out = torch.cat([x[src].relu(), x[dst].relu(), edge_attr], -1)
+            out = self.decoder(out)
+            return out
+        elif self.readout == "node":
+            out = self.decoder(x)
+            return out
+        elif self.readout == "node_embed":
+            return x
 
         # Original (slow):
         # x = x[edge_index.T].reshape(-1, 2 * self.hidden_channels).relu()
         # x = torch.cat((x, edge_attr.view(-1, edge_attr.shape[1])), 1)
-        # return self.mlp(x)
+        # return self.decoder(x)
+
+
+class GATe(torch.nn.Module):
+
+    def __init__(self,
+                 edge_update: bool = False,
+                 edge_dim=None,
+                 batch_norm=True,
+                 layer_mix: Literal["None", "Mean", "Sum", "Max",
+                                    "Cat"] = "Mean",
+                 model_mix: Literal["Mean", "Sum", "Max",
+                                    "Cat_MLP"] = "Cat_MLP",
+                 *args,
+                 **kwargs):
+
+        super().__init__()
+
+        self.reverse_mp = kwargs.get("reverse_mp", False)
+        self.layer_mix = layer_mix
+        self.model_mix = model_mix
+        self.config = kwargs.get("config", {})
+        self.cat_mlp = None
+        self.readout = kwargs.get("readout", "edge")
+        out_channels = kwargs["out_channels"]
+
+        if self.reverse_mp and self.layer_mix.lower() == "none":
+            kwargs["reverse_mp"] = False
+            self.org_model = GATe_layer_mix(edge_update=edge_update,
+                                            edge_dim=edge_dim,
+                                            batch_norm=batch_norm,
+                                            layer_mix=layer_mix,
+                                            *args,
+                                            **kwargs)
+
+            self.rev_model = GATe_layer_mix(edge_update=edge_update,
+                                            edge_dim=edge_dim,
+                                            batch_norm=batch_norm,
+                                            layer_mix=layer_mix,
+                                            *args,
+                                            **kwargs)
+            if model_mix == "Cat_MLP":
+                self.cat_mlp = MLP(
+                    [out_channels * 2, out_channels * 2, out_channels])
+
+        else:
+            if not self.reverse_mp:
+                self.layer_mix = "None"
+            self.model = GATe_layer_mix(edge_update=edge_update,
+                                        edge_dim=edge_dim,
+                                        batch_norm=batch_norm,
+                                        layer_mix=self.layer_mix,
+                                        *args,
+                                        **kwargs)
+
+    def forward(self, x, edge_index, edge_attr, **kwargs):
+        if self.reverse_mp and self.layer_mix.lower() == "none":
+            rev_edge_index = kwargs.pop("rev_edge_index", None)
+            rev_edge_attr = kwargs.pop("rev_edge_attr", None)
+            assert len(kwargs) == 0, "Unexpected arguments!"
+
+            org_out = self.org_model(x, edge_index, edge_attr)
+            rev_out = self.rev_model(x, rev_edge_index, rev_edge_attr)
+            return self.get_model_mixture(org_out, rev_out)
+        else:
+            return self.model(x, edge_index, edge_attr, **kwargs)
+
+    def encode(self, *args, **kwargs):
+        return self.forward(*args, **kwargs)
+
+    def decode(self, embedding):
+        if self.reverse_mp and self.layer_mix.lower() == "none":
+            org_out = self.org_model.decode(embedding)
+            rev_out = self.rev_model.decode(embedding)
+            return self.get_model_mixture(org_out, rev_out)
+        else:
+            return self.model.decode(embedding)
+
+    def reset_parameters(self):
+        if self.reverse_mp and self.layer_mix.lower() == "none":
+            self.org_model.reset_parameters()
+            self.rev_model.reset_parameters()
+            if self.cat_mlp is not None:
+                self.cat_mlp.reset_parameters()
+        else:
+            self.model.reset_parameters()
+
+    def get_model_mixture(self, org_out, rev_out):
+        match self.model_mix.lower():
+            case "mean":
+                return (org_out + rev_out) / 2
+            case "sum":
+                return org_out + rev_out
+            case "max":
+                return torch.max(org_out, rev_out)
+            case "cat_mlp":
+                out = torch.cat((org_out, rev_out), dim=1)
+                return self.cat_mlp(out)
+            case _:
+                raise NotImplementedError

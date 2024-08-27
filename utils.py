@@ -28,7 +28,10 @@ def add_train_parser(subparsers: argparse._SubParsersAction,
     experiment_config.add_argument('--register_model',
                                    action=argparse.BooleanOptionalAction,
                                    default=None)
-    experiment_config.add_argument('--from_run_config', type=str, default=None)
+    experiment_config.add_argument('-c',
+                                   '--from_run_config',
+                                   type=str,
+                                   default=None)
 
     # System settings
     system_config = parser.add_argument_group("System Configurations")
@@ -385,7 +388,7 @@ def load_run_config(config: dict):
     assert file_type == ".yaml", "The run_config must be a yaml file!!!"
     exp_config_file = os.path.join(exp_config["config_dir"], "run",
                                    exp_config_file)
-    
+
     with open(exp_config_file, 'r') as in_file:
         run_config = yaml.safe_load(in_file)
     return run_config

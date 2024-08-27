@@ -5,7 +5,7 @@ from torch_geometric.nn.conv import PNAConv
 from loguru import logger  # noqa
 
 from .GraphSAGE import GraphSAGE_PyG
-from .GAT import GAT_PyG, GAT_Custom
+from .GAT import GAT_PyG, GAT_Custom, GATe
 from .GIN import GIN_PyG, GIN_Custom, GINe
 from .PNA import PNA_PyG, PNA_Custom, PNAe
 
@@ -25,10 +25,12 @@ def filter_config_for_archive(config):
 
 
 def get_readout(task_type):
-    if task_type.endswith("NC"):
+    if task_type in ["single-label-NC", "multi-label-NC"]:
         return "node"
-    elif task_type.endswith("EC"):
+    elif task_type in ["single-label-EC", "multi-label-EC"]:
         return "edge"
+    elif task_type in ["single-label-dynamic_NC"]:
+        return "node_embed"
     else:
         raise NotImplementedError
 
@@ -74,6 +76,21 @@ def get_model(config, train_loader):
                                v2=model_config.pop("v2", False),
                                config=archive_config,
                                **model_config)
+        case "GATe":
+            model_config["readout"] = get_readout(dataset_config["task_type"])
+            model = GATe(in_channels=dataset_config["num_node_features"],
+                         out_channels=dataset_config["num_classes"],
+                         hidden_channels_per_head=model_config.pop(
+                             "hidden_channels_per_head"),
+                         heads=model_config.pop("heads", 8),
+                         output_heads=model_config.pop("output_heads", 1),
+                         v2=model_config.pop("v2", False),
+                         edge_dim=dataset_config["num_edge_features"],
+                         num_layers=model_config.pop("num_layers"),
+                         edge_update=model_config.pop("edge_update", False),
+                         batch_norm=model_config.pop("batch_norm", True),
+                         config=archive_config,
+                         **model_config)
         case "GIN_PyG":
             model = GIN_PyG(
                 in_channels=dataset_config["num_node_features"],

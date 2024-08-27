@@ -56,7 +56,7 @@ model_config:
   skip_connection: true
 
 AMLconfig:
-  task_type: single-label-NC_by_self_loop_EC
+  task_type: single-label-dynamic_NC
   infer_timewindow: 1
   infer_period: 1
   add_egoID: true

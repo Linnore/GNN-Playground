@@ -201,9 +201,9 @@ def eval_gnn(config):
     train_loader, val_loader, test_loader = get_loader(config)
 
     task_type = dataset_config["task_type"]
-    if task_type.endswith("NC"):
+    if task_type in ["single-label-NC", "multi-label-NC"]:
         eval_step = eval_node_classification
-    elif task_type.endswith("EC"):
+    elif task_type in ["single-label-EC", "multi-label-EC"]:
         eval_step = eval_edge_classification
 
     reports = {}

@@ -85,9 +85,9 @@ def get_io_schema(sample_input: dict, dataset_config: dict):
 
     input_schema = Schema(input_list)
 
-    if dataset_config["task_type"].endswith("NC"):
+    if dataset_config["task_type"] in ["single-label-NC", "multi-label-NC"]:
         output_first_dim = "num_nodes"
-    elif dataset_config["task_type"].endswith("EC"):
+    elif dataset_config["task_type"] in ["single-label-EC", "multi-label-EC"]:
         output_first_dim = "num_edges"
     output_schema = Schema([
         TensorSpec(np.dtype(np.float32),
@@ -149,7 +149,7 @@ def get_loss_fn(config, loader, reduction="mean"):
                                           reduction=reduction)
 
     elif dataset_config["task_type"] in [
-            "single-label-EC", "single-label-NC_by_self_loop_EC"
+            "single-label-EC", "single-label-dynamic_NC"
     ]:
         if training_config["weighted_CE"]:
             weight = get_weight_for_CrossEntropyLoss(data, config)
@@ -195,7 +195,7 @@ def node_classification_step(mode: str,
         elif sampling_strategy == "GraphBatching":
             mask = None
 
-        targets = batch.y.to(device).long()
+        targets = batch.y.to(device)
         outputs = model(**get_batch_input(batch, reverse_mp, device))
 
         if mask is not None:
@@ -288,30 +288,19 @@ def edge_classification_step(mode: str,
             optimizer.zero_grad()
 
         if sampling_strategy == "SAGE":
-            if hasattr(
-                    loader.data,
-                    "readout") and loader.data.readout == "dynamic_node_label":
-                mask = torch.hstack((torch.zeros(batch.num_edges,
-                                                 dtype=torch.bool),
-                                     torch.ones(batch.edge_label.shape[0],
-                                                dtype=torch.bool)))
-                append_source_nodes_by_self_loops(batch, temporal_sampling,
-                                                  time_attr)
+            # Get edges in batch that are source edges
+            batch.src_e_id = loader.data.input_id_to_e_id[batch.input_id]
+            mask = torch.isin(batch.e_id, batch.src_e_id)
+            in_batch_e_id = batch.e_id[mask]
 
-            else:
-                # Get edges in batch that are source edges
-                batch.src_e_id = loader.data.input_id_to_e_id[batch.input_id]
-                mask = torch.isin(batch.e_id, batch.src_e_id)
-                in_batch_e_id = batch.e_id[mask]
+            # Get source edges that are not in batch
+            mask_not_in_batch = ~torch.isin(batch.src_e_id, in_batch_e_id)
 
-                # Get source edges that are not in batch
-                mask_not_in_batch = ~torch.isin(batch.src_e_id, in_batch_e_id)
-
-                # Append source edges that are not in batch to the batch
-                append_source_edges(batch, mask_not_in_batch, loader.data,
-                                    temporal_sampling, time_attr)
-                mask = torch.hstack(
-                    (mask, torch.ones(batch.num_appended, dtype=torch.bool)))
+            # Append source edges that are not in batch to the batch
+            append_source_edges(batch, mask_not_in_batch, loader.data,
+                                temporal_sampling, time_attr)
+            mask = torch.hstack(
+                (mask, torch.ones(batch.num_appended, dtype=torch.bool)))
 
         elif sampling_strategy in [None, "None"]:
             mask = batch[f"{mode}_mask"]
@@ -380,6 +369,98 @@ def edge_classification_step(mode: str,
     return results
 
 
+def dynamic_node_classification_step(mode: str,
+                                     epoch,
+                                     loader,
+                                     model,
+                                     loss_fn,
+                                     optimizer,
+                                     enable_tqdm,
+                                     sampling_strategy,
+                                     device="cpu",
+                                     temporal_sampling=False,
+                                     time_attr="time",
+                                     multilabel=False,
+                                     threshold=0,
+                                     reverse_mp=False,
+                                     compute_f1=False,
+                                     compute_auc=False,
+                                     f1_average="binary",
+                                     auc_average="macro"):
+    total_loss = 0
+    total_num = 0
+    predictions = []
+    truths = []
+    if compute_auc:
+        prob_scores = []
+    bar = tqdm(loader, total=len(loader), disable=not enable_tqdm)
+    for batch in bar:
+        if mode == "train":
+            optimizer.zero_grad()
+
+        targets = batch.edge_label.long()
+        target_nodes = batch.edge_label_index[0, :]
+        # logger.debug(target_nodes)
+        embedding = model.encode(
+            **get_batch_input(batch, reverse_mp, device))[target_nodes, :]
+        # logger.debug(embedding.shape)
+        outputs = model.decode(embedding)
+
+        loss = loss_fn(outputs, targets)
+
+        if mode == "train":
+            loss.backward()
+            optimizer.step()
+
+        if multilabel:
+            preds = outputs > threshold
+            if compute_auc:
+                scores = torch.sigmoid(outputs)
+        else:
+            preds = outputs.argmax(dim=-1)
+            if compute_auc:
+                scores = torch.softmax(outputs, dim=-1)
+
+        predictions.append(preds.detach().cpu().numpy())
+        truths.append(targets.detach().cpu().numpy())
+        if compute_auc:
+            prob_scores.append(scores.detach().cpu().numpy())
+
+        loss = loss.detach().cpu().item()
+        num_targets = outputs.numel()
+        total_loss += loss * num_targets
+        total_num += num_targets
+        bar.set_description(f"{mode}_loss={loss:<8.6g}")
+
+    # Metrics
+    results = {}
+    predictions = np.concatenate(predictions)
+    truths = np.concatenate(truths)
+    if compute_auc:
+        prob_scores = np.concatenate(prob_scores)
+
+    avg_loss = total_loss / total_num
+    mlflow.log_metric(f"{mode} loss", avg_loss, epoch)
+
+    if compute_f1:
+        f1 = f1_score(truths, predictions, average=f1_average)
+        mlflow.log_metric(f"{mode} F1", f1, epoch)
+        results["f1"] = f1
+
+    if compute_auc:
+        auc = roc_auc_score(truths,
+                            prob_scores,
+                            average=auc_average,
+                            multi_class="ovo")
+        mlflow.log_metric(f"{mode} AUC", f1, epoch)
+        results["auc"] = auc
+
+    results["loss"] = avg_loss
+    results["predictions"] = predictions
+    results["truths"] = truths
+    return results
+
+
 def get_run_step(task_type, run_step_kwargs):
     if task_type == "single-label-NC":
         return node_classification_step, run_step_kwargs
@@ -391,7 +472,7 @@ def get_run_step(task_type, run_step_kwargs):
     elif task_type == "multi-label-EC":
         run_step_kwargs["multilabel"] = True
         return edge_classification_step, run_step_kwargs
-    elif task_type == "single-label-NC_by_self_loop_EC":
-        return edge_classification_step, run_step_kwargs
+    elif task_type == "single-label-dynamic_NC":
+        return dynamic_node_classification_step, run_step_kwargs
     else:
         raise NotImplementedError("Unsupported task type for training.")

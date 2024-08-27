@@ -70,11 +70,11 @@ def get_data_SAGE(config):
             f"AMLworld configuration: {pprint.pformat(AMLworld_config)}")
         dataset_config = config["dataset_config"]
         task_type = AMLworld_config["task_type"]
-        if task_type.endswith("NC"):
+        if task_type in ["single-label-NC", "multi-label-NC"]:
             readout = "node"
         elif task_type == "single-label-EC":
             readout = "edge"
-        elif task_type == "single-label-NC_by_self_loop_EC":
+        elif task_type == "single-label-dynamic_NC":
             readout = "dynamic_node_label"
         else:
             raise NotImplementedError
@@ -110,9 +110,12 @@ def get_data_SAGE(config):
                 ) + data.num_edges - data.num_input_edges
 
         if AMLworld_config["add_egoID"]:
-            if task_type.endswith("NC"):
+            if task_type in ["single-label-NC", "multi-label-NC"]:
                 AddEgoIds = AddEgoIds_for_NeighborLoader
-            elif task_type.endswith("EC"):
+            elif task_type in [
+                    "single-label-EC", "multi-label-EC",
+                    "single-label-dynamic_NC"
+            ]:
                 AddEgoIds = AddEgoIds_for_LinkNeighborLoader
             else:
                 raise ValueError("Unsupported task type for add_egoID!")
@@ -163,7 +166,7 @@ def get_data_SAGE(config):
             test_data.test_mask = torch.ones(test_data.num_nodes, dtype=bool)
 
     # Edge Classification
-    elif task_type in ["single-label-EC", "single-label-NC_by_self_loop_EC"]:
+    elif task_type in ["single-label-EC", "single-label-dynamic_NC"]:
         # For dataset containing one graph and indicate split by mask
         if len(dataset) == 1:
             data = dataset[0]
@@ -176,9 +179,7 @@ def get_data_SAGE(config):
             elif general_config["framework"] == "inductive":
                 SAGE_inductive_option = sampling_config[
                     "SAGE_inductive_option"]
-                if SAGE_inductive_option in [
-                        "default", "strict"
-                ]:
+                if SAGE_inductive_option in ["default", "strict"]:
                     logger.info(
                         "Using data split for strict inductive learning.")
                     train_data = data.edge_subgraph(data.train_mask)
@@ -388,14 +389,14 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             num_workers=system_config["num_workers"],
         )
 
-    elif task_type in ["single-label-NC_by_self_loop_EC"]:
+    elif task_type in ["single-label-dynamic_NC"]:
         # Currently only support AMLworld dataset with
         # readout==`dynamic_node_label`.
         # Require data field:
         #   data.node_time_label: (node, timestamp, label)
 
         # Represent node dynamic label by self loops with timestamps
-        def prepare_for_NC_by_self_loop_EC(input_data, in_place=True):
+        def prepare_for_dynamic_NC(input_data, in_place=True):
             if in_place:
                 data = input_data
             else:
@@ -411,18 +412,18 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
             if not in_place:
                 return data
 
-        prepare_for_NC_by_self_loop_EC(train_data)
+        prepare_for_dynamic_NC(train_data)
         train_loader = LinkNeighborLoader(
             train_data,
             num_neighbors=num_neighbors,
             batch_size=params["batch_size"],
             edge_label_index=train_data.node_event,
             edge_label=train_data.node_event_label,
-            edge_label_time=train_data.node_event_time,
+            edge_label_time=train_data.node_event_time if temporal else None,
             time_attr=time_attr,
             temporal_strategy=temporal_strategy,
             transform=transform,
-            shuffle=True,
+            shuffle=False,
             num_workers=system_config["num_workers"],
         )
 
@@ -433,28 +434,28 @@ def get_loader_SAGE(train_data, val_data, test_data, transform, config):
                 "and testing.")
             num_neighbors = [-1] * model_config["num_layers"]
 
-        prepare_for_NC_by_self_loop_EC(val_data)
+        prepare_for_dynamic_NC(val_data)
         val_loader = LinkNeighborLoader(
             val_data,
             num_neighbors=num_neighbors,
             batch_size=params["batch_size"],
             edge_label_index=val_data.node_event,
             edge_label=val_data.node_event_label,
-            edge_label_time=val_data.node_event_time,
+            edge_label_time=val_data.node_event_time if temporal else None,
             time_attr=time_attr,
             temporal_strategy=temporal_strategy,
             transform=transform,
             num_workers=system_config["num_workers"],
         )
 
-        prepare_for_NC_by_self_loop_EC(test_data)
+        prepare_for_dynamic_NC(test_data)
         test_loader = LinkNeighborLoader(
             test_data,
             num_neighbors=num_neighbors,
             batch_size=params["batch_size"],
             edge_label_index=test_data.node_event,
             edge_label=test_data.node_event_label,
-            edge_label_time=test_data.node_event_time,
+            edge_label_time=test_data.node_event_time if temporal else None,
             time_attr=time_attr,
             temporal_strategy=temporal_strategy,
             transform=transform,
@@ -497,8 +498,9 @@ def get_loader_graph_batch(train_dataset, val_dataset, test_dataset, transform,
     system_config = config["system_config"]
     sampling_config = config["sampling_config"]
 
-    if sampling_config["sampling_strategy"] == "GraphBatching" and config[
-            "dataset_config"]["task_type"].endswith("-EC"):
+    if (sampling_config["sampling_strategy"]
+            == "GraphBatching") and (config["dataset_config"]["task_type"]
+                                     in ["single-label-EC", "multi-label-EC"]):
         raise NotImplementedError(
             "Graph Batching is not implemented for edge classification task!")
 
