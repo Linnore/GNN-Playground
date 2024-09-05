@@ -22,5 +22,6 @@ output/*
 registered_models/*
 
 # For experiment 
-exp.ipynb
 tmp/*
+
+!dataset/README.md
