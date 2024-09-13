@@ -1,13 +1,29 @@
-CE_weight: None
 batch_size: 512
 lr: 0.005
+weight_decay: 0.0005
+
 num_epochs: 1000
+patience: 100
 criterion: loss
+criterion_options:
+ - loss
+ - f1
+ - auc
 compute_f1: true
 f1_average: micro
 compute_auc: false
 auc_average: macro
-patience: 100
-weight_decay: 0.0005
+compute_rr: false
+
+loss_fn: null
+loss_fn_options:
+ - CE
+ - Focal  # Only for single-label binary task
+ - BCE  # Only for multi-label task
+
 weighted_BCE: false
 weighted_CE: false
+CE_weight: null
+
+focal_gamma: 2
+focal_alpha: 0.25

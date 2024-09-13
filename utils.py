@@ -58,7 +58,10 @@ def add_train_parser(subparsers: argparse._SubParsersAction,
     training_config.add_argument('--batch_size', '-b', type=int, default=None)
     training_config.add_argument('--lr', type=float, default=None)
     training_config.add_argument('--weight_decay', type=float, default=None)
-
+    training_config.add_argument(
+        '--loss_fn',
+        choices=config["training_config"]["loss_fn_options"],
+        default=None)
     training_config.add_argument('--weighted_BCE',
                                  action=argparse.BooleanOptionalAction,
                                  default=None)
@@ -66,13 +69,26 @@ def add_train_parser(subparsers: argparse._SubParsersAction,
     training_config.add_argument('--weighted_CE',
                                  action=argparse.BooleanOptionalAction,
                                  default=None)
-    training_config.add_argument('--criterion',
-                                 type=str,
-                                 default=None,
-                                 choices=["loss", "accuracy", "f1", "auc"])
+    training_config.add_argument(
+        '--criterion',
+        type=str,
+        default=None,
+        choices=config["training_config"]["criterion_options"])
+    training_config.add_argument('--compute_f1',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
+    training_config.add_argument('--compute_auc',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
     training_config.add_argument('--f1_average', type=str, default=None)
+    training_config.add_argument('--auc_average', type=str, default=None)
     training_config.add_argument('--num_epochs', type=int, default=None)
     training_config.add_argument('--patience', type=int, default=None)
+    training_config.add_argument('--focal_loss',
+                                 action=argparse.BooleanOptionalAction,
+                                 default=None)
+    training_config.add_argument('--focal_alpha', type=float, default=None)
+    training_config.add_argument('--focal_gamma', type=float, default=None)
 
     # sampling settings
     sampling_config = parser.add_argument_group("Global Sampling settings")
@@ -315,7 +331,6 @@ def set_global_seed(seed):
 
 def setup_mlflow(config):
     # MLFlow
-
     mlflow_config = config["mlflow_config"]
     os.environ["MLFLOW_TRACKING_URI"] = mlflow_config['tracking_uri']
     if mlflow_config["auth"]:

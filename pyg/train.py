@@ -2,12 +2,11 @@ import torch
 import mlflow
 import pprint
 import os
-import copy
 
 from .data_utils import get_loader
 from .model.model_hub import get_model
 from .train_utils import (get_loss_fn, get_run_step, get_batch_input,
-                          get_io_schema)
+                          get_io_schema, compute_metrics)
 
 from loguru import logger
 from torch_geometric.nn import summary
@@ -31,9 +30,10 @@ def train_gnn(config):
 
     # Initialize MLflow Logging
     logger.info(f"Launching experiment: {mlflow_config['mlf_experiment']}")
-    mlflow.set_experiment(mlflow_config["mlf_experiment"])
+    mlflow.set_experiment(mlflow_config["mlf_experiment"], )
     run_name = (f"{experiment_config['model']}"
                 f"-{experiment_config['dataset']}")
+    pip_requirements = ["pyg-lib==0.4.0"]
 
     model_name = run_name
     run = mlflow.start_run(run_name=run_name, log_system_metrics=True)
@@ -44,6 +44,10 @@ def train_gnn(config):
 
     # Get loaders
     train_loader, val_loader, test_loader = get_loader(config)
+
+    # Setup loss function
+    loss_fn = get_loss_fn(config, train_loader, reduction='mean').to(device)
+    logger.info(f"Loss function: {loss_fn}")
 
     # Get model
     model = get_model(config, train_loader).to(device)
@@ -64,10 +68,6 @@ def train_gnn(config):
     mlflow.log_params(model.config["sampling_config"])
     mlflow.log_params(model.config["model_config"])
 
-    # Setup loss function
-    loss_fn = get_loss_fn(config, train_loader, reduction='mean').to(device)
-    logger.info(f"Loss function: {loss_fn}")
-
     # Setup save directory for optimizer states
     save_path = os.path.join(
         "logs/tmp", f"{run.info.run_name}-Optimizer-{run.info.run_id}.tar")
@@ -83,6 +83,10 @@ def train_gnn(config):
     with open("logs/tmp/model_summary.txt", "w") as out_file:
         out_file.write(summary_str)
     mlflow.log_artifact("logs/tmp/model_summary.txt")
+    input_schema, output_schema = get_io_schema(
+        sample_input,
+        dataset_config,
+    )
 
     # Setup Optimizer
     optimizer = torch.optim.Adam(model.parameters(),
@@ -91,9 +95,9 @@ def train_gnn(config):
 
     # Setup metrics
     criterion = training_config["criterion"].lower()
-    if criterion in ["loss", "auc"]:
+    if criterion in ["loss"]:
         best_value = -2147483647
-    elif criterion == "f1":
+    elif criterion in ["f1", "auc"]:
         best_value = -1
 
     # Training loop
@@ -102,15 +106,10 @@ def train_gnn(config):
         patience = training_config["num_epochs"]
 
     # Setup training steps according to task type
-    compute_f1 = training_config["compute_f1"]
-    compute_auc = training_config["compute_auc"]
-    if criterion == "f1":
-        compute_f1 = True
-    if criterion == "auc":
-        compute_auc = True
     run_step_kwargs = dict(
         model=model,
         loss_fn=loss_fn,
+        loss_fn_name=training_config["loss_fn"],
         optimizer=optimizer,
         sampling_strategy=sampling_config["sampling_strategy"],
         temporal_sampling=sampling_config["temporal_sampling"],
@@ -118,6 +117,16 @@ def train_gnn(config):
         enable_tqdm=system_config["tqdm"],
         device=device,
         reverse_mp=reverse_mp,
+        use_threshold=False)
+
+    compute_f1 = training_config["compute_f1"]
+    compute_auc = training_config["compute_auc"]
+    if criterion == "f1":
+        compute_f1 = True
+    if criterion == "auc":
+        compute_auc = True
+
+    compute_metrics_kwargs = dict(
         compute_f1=compute_f1,
         f1_average=training_config["f1_average"],
         compute_auc=compute_auc,
@@ -135,7 +144,6 @@ def train_gnn(config):
         model.train()
         train_result = run_step("train", epoch, train_loader,
                                 **run_step_kwargs)
-
         with torch.no_grad():
             # Validation
             model.eval()
@@ -144,18 +152,36 @@ def train_gnn(config):
             # Test
             test_result = run_step("test", epoch, test_loader,
                                    **run_step_kwargs)
+
+        # Compute Metrics
+        val_metrics = compute_metrics("val", epoch, val_result["prob_scores"],
+                                      val_result["truths"],
+                                      val_result["predictions"],
+                                      **compute_metrics_kwargs)
+        train_metrics = compute_metrics("train", epoch,
+                                        train_result["prob_scores"],
+                                        train_result["truths"],
+                                        train_result["predictions"],
+                                        **compute_metrics_kwargs)
+        test_metrics = compute_metrics("test", epoch,
+                                       test_result["prob_scores"],
+                                       test_result["truths"],
+                                       test_result["predictions"],
+                                       **compute_metrics_kwargs)
+
+        # Messages
         msg = f"Epoch {epoch}:"
         train_msg = [f"train_loss={train_result['loss']:<8.6g}"]
         val_msg = [f"val_loss={val_result['loss']:<8.6g}"]
         test_msg = [f"test_loss={test_result['loss']:<8.6g}"]
         if compute_f1:
-            train_msg.append(f"train_f1={train_result['f1']:<8.6g}")
-            val_msg.append(f"val_f1={val_result['f1']:<8.6g}")
-            test_msg.append(f"test_f1={test_result['f1']:<8.6g}")
+            train_msg.append(f"train_f1={train_metrics['f1']:<8.6g}")
+            val_msg.append(f"val_f1={val_metrics['f1']:<8.6g}")
+            test_msg.append(f"test_f1={test_metrics['f1']:<8.6g}")
         if compute_auc:
-            train_msg.append(f"train_auc={train_result['auc']:<8.6g}")
-            val_msg.append(f"val_auc={val_result['auc']:<8.6g}")
-            test_msg.append(f"test_auc={test_result['auc']:<8.6g}")
+            train_msg.append(f"train_auc={train_metrics['auc']:<8.6g}")
+            val_msg.append(f"val_auc={val_metrics['auc']:<8.6g}")
+            test_msg.append(f"test_auc={test_metrics['auc']:<8.6g}")
         msg = msg + ", ".join(train_msg + val_msg + test_msg)
         logger.info(msg)
 
@@ -163,15 +189,16 @@ def train_gnn(config):
         if criterion == "loss":
             criterion_value = -val_result[criterion]
         elif criterion in ["f1", "auc"]:
-            criterion_value = val_result[criterion]
+            criterion_value = val_metrics[criterion]
 
         if criterion_value > best_value:
             best_value = criterion_value
             if compute_f1:
-                mlflow.log_metric("Best Test F1", test_result['f1'], epoch)
+                mlflow.log_metric("Best Test F1", test_metrics['f1'], epoch)
             if compute_auc:
-                mlflow.log_metric("Best Test AUC", test_result['auc'], epoch)
-            best_model_state_dict = copy.deepcopy(model.state_dict())
+                mlflow.log_metric("Best Test AUC", test_metrics['auc'], epoch)
+
+            # best_model_state_dict = copy.deepcopy(model.state_dict())
             best_report = classification_report(test_result['truths'],
                                                 test_result['predictions'],
                                                 zero_division=0)
@@ -182,23 +209,18 @@ def train_gnn(config):
                     'optimizer_state_dict': optimizer.state_dict(),
                 }, save_path)
 
+            # Save model
+            mlflow.pytorch.log_model(model,
+                                     model_name,
+                                     signature=ModelSignature(
+                                         inputs=input_schema,
+                                         outputs=output_schema),
+                                     pip_requirements=pip_requirements)
         # Early Stopping
         if epoch - best_epoch > patience:
             logger.info("Patience reached. Early stop the trainning.")
             break
 
-    # Save model
-    model.load_state_dict(best_model_state_dict)
-    input_schema, output_schema = get_io_schema(
-        sample_input,
-        dataset_config,
-    )
-
-    mlflow.pytorch.log_model(
-        model,
-        model_name,
-        signature=ModelSignature(inputs=input_schema, outputs=output_schema),
-    )
     mlflow.log_artifact(save_path, "Optimizer States")
     os.remove(save_path)
 
